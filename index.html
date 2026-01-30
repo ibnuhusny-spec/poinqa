@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sistem Poin Siswa - SDIT Qurratu A'yun Al-Islami</title>
     
-    <!-- Tailwind CSS (Abaikan warning di console, ini normal untuk mode standalone) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -50,18 +50,6 @@
         ::-webkit-scrollbar { width: 0px; background: transparent; }
         .fade-in { animation: fadeIn 0.5s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* Tab Active Styles */
-        .tab-btn-active {
-            background-color: white;
-            border-bottom: 3px solid;
-            color: #374151;
-        }
-        .tab-btn-inactive {
-            background-color: #f3f4f6;
-            color: #9ca3af;
-            border-bottom: 3px solid transparent;
-        }
 
         /* Loader Overlay */
         #loader {
@@ -120,7 +108,6 @@
         const defaultSchoolData = {
             name: "SDIT Qurratu A'yun Al-Islami",
             location: "Kabupaten Maros",
-            // Menggunakan URL gambar online agar tidak error "File Not Found"
             logo: "https://cdn-icons-png.flaticon.com/512/3209/3209265.png",
             apiUrl: "" 
         };
@@ -136,17 +123,15 @@
             { id: 8, type: 'minus', label: 'Buang Sampah Sembarangan', points: -5, icon: 'fa-trash' }
         ];
 
-        // LOAD DATA FROM LOCAL STORAGE WITH SAFETY CHECK
-        let storedSchoolData = localStorage.getItem('schoolData');
-        let schoolData = storedSchoolData ? JSON.parse(storedSchoolData) : defaultSchoolData;
+        // LOAD DATA LOCAL
+        let schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
         
-        // Safety: Jika data rusak/kosong, kembalikan ke default, TAPI pertahankan API URL jika ada
-        if (!schoolData || !schoolData.name) {
-            const savedApi = schoolData ? schoolData.apiUrl : "";
-            schoolData = { ...defaultSchoolData };
-            if(savedApi) schoolData.apiUrl = savedApi;
+        // Safety Check: Pastikan object schoolData valid
+        if(!schoolData.name) {
+            let tempApi = schoolData.apiUrl || "";
+            schoolData = { ...defaultSchoolData, apiUrl: tempApi };
         }
-
+        
         let students = JSON.parse(localStorage.getItem('students')) || [];
         let logs = JSON.parse(localStorage.getItem('logs')) || []; 
         let behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
@@ -163,7 +148,7 @@
             }
         }
 
-        // --- CLOUD SYNC LOGIC (FIXED FOR PERSISTENCE) ---
+        // --- CLOUD SYNC LOGIC (SMART SYNC V2) ---
         let debounceTimer;
         let lastSyncError = "";
 
@@ -192,7 +177,7 @@
             if (lastSyncError) {
                 Swal.fire({ 
                     title: 'Status Koneksi', 
-                    html: `<div class="text-left text-sm"><p class="font-bold text-red-600 mb-2">Pesan: ${lastSyncError}</p><p class="mb-2">Jika data Anda tetap ada saat aplikasi ditutup/buka, abaikan pesan ini.</p></div>`, 
+                    html: `<div class="text-left text-sm"><p class="font-bold text-red-600 mb-2">Pesan: ${lastSyncError}</p><p class="mb-2">Aplikasi tetap menyimpan data di HP (Offline Mode) jika koneksi gagal.</p></div>`, 
                     icon: 'warning' 
                 });
             }
@@ -203,7 +188,14 @@
             formData.append('data', JSON.stringify(payload));
             return fetch(url, { method: 'POST', body: formData })
                 .then(response => { if (!response.ok) throw new Error("HTTP " + response.status); return response.text(); })
-                .then(text => { try { return JSON.parse(text); } catch(e) { return { result: "success" }; } });
+                .then(text => { 
+                    try { return JSON.parse(text); } 
+                    catch(e) { 
+                        // Jika respon HTML sukses (redirect Google), anggap sukses
+                        if(text.includes('script') || text.includes('Google')) return { result: "success" };
+                        throw new Error("Respon tidak valid"); 
+                    } 
+                });
         }
 
         function forceTestWrite(url) {
@@ -222,7 +214,7 @@
                         saveData(true); // Save URL locally
                         document.querySelector('input[name="apiUrl"]').value = url; 
                     }).catch(err => { 
-                        Swal.fire('Gagal Kirim', 'Cek koneksi internet atau URL Script.', 'error'); 
+                        Swal.fire('Gagal Kirim', 'Cek URL Script dan akses "Anyone" (Siapa Saja).', 'error'); 
                     }); 
                 } 
             });
@@ -238,7 +230,6 @@
                 sendDataToScript(schoolData.apiUrl, payload)
                     .then(data => { updateSyncUI('success'); lastSyncError = ""; })
                     .catch(err => { 
-                        // Fallback No-CORS
                         fetch(schoolData.apiUrl, { method: 'POST', mode: 'no-cors', body: new URLSearchParams({data: JSON.stringify(payload)}) })
                         .then(() => { updateSyncUI('success'); })
                         .catch(e => { updateSyncUI('error', "Koneksi Terputus"); lastSyncError = err.message; }); 
@@ -249,36 +240,61 @@
         function loadFromCloud() {
             if (!schoolData.apiUrl) return;
             
-            // Jangan tampilkan loader full screen agar tidak mengganggu, cukup status di pojok
             updateSyncUI('loading'); 
             
             fetch(schoolData.apiUrl)
             .then(response => response.json())
             .then(data => { 
-                // --- SMART MERGE LOGIC ---
-                // Hanya update jika data cloud valid & tidak kosong
-                if (data.students && Array.isArray(data.students)) students = data.students;
-                if (data.logs && Array.isArray(data.logs)) logs = data.logs;
-                if (data.behaviors && data.behaviors.length > 0) behaviors = data.behaviors;
-                
-                // PENTING: Jangan timpa Settings lokal dengan Settings kosong dari cloud!
-                const cloudSettings = data.schoolData;
-                const currentApi = schoolData.apiUrl; // Simpan API URL lokal
-                
-                if (cloudSettings && cloudSettings.name && cloudSettings.name !== "") {
-                    // Jika cloud punya nama sekolah, pakai data cloud
-                    schoolData = { ...cloudSettings, apiUrl: currentApi };
-                } else {
-                    // Jika cloud kosong (misal baru dibuat), PERTAHANKAN data lokal, jangan ditimpa!
-                    console.log("Cloud settings kosong, mempertahankan setting lokal.");
+                // --- SMART MERGE LOGIC V2 (ANTI-HAPUS) ---
+                let cloudHasData = false;
+                let localHasData = students.length > 0;
+
+                // 1. Cek Data Siswa Cloud
+                if (data.students && Array.isArray(data.students) && data.students.length > 0) {
+                    students = data.students;
+                    cloudHasData = true;
+                }
+
+                // 2. Cek Logs
+                if (data.logs && Array.isArray(data.logs) && data.logs.length > 0) {
+                    logs = data.logs;
+                }
+
+                // 3. Cek Behaviors
+                if (data.behaviors && Array.isArray(data.behaviors) && data.behaviors.length > 0) {
+                    behaviors = data.behaviors;
                 }
                 
-                saveData(true); // Simpan hasil merge ke local storage
-                updateSyncUI('success'); 
+                // 4. Cek Settings
+                const cloudSettings = data.schoolData;
+                const currentApi = schoolData.apiUrl;
                 
-                // Refresh UI jika sedang di dashboard
-                if(document.getElementById('studentListContainer')) { renderTeacherDashboard(); }
-                // Refresh Splash jika masih di halaman depan (opsional)
+                // Hanya update setting jika cloud valid dan BUKAN default/kosong
+                if (cloudSettings && cloudSettings.name && cloudSettings.name.length > 3 && cloudSettings.name !== "SDIT Qurratu A'yun Al-Islami") {
+                    schoolData = { ...cloudSettings, apiUrl: currentApi };
+                }
+
+                // LOGIKA KEPUTUSAN FINAL
+                if (cloudHasData) {
+                    // Skenario A: Cloud ada data -> Update Lokal
+                    console.log("Sync: Mengambil data dari Cloud.");
+                    saveData(true); 
+                    updateSyncUI('success');
+                    
+                    // Refresh tampilan
+                    if(document.getElementById('studentListContainer')) { renderTeacherDashboard(); }
+                    const logoImg = document.getElementById('mainLogo');
+                    if(logoImg) logoImg.src = schoolData.logo;
+
+                } else if (localHasData) {
+                    // Skenario B: Cloud KOSONG, tapi Lokal ADA -> Kirim Lokal ke Cloud
+                    console.log("Sync: Cloud kosong, mengirim data lokal...");
+                    syncToCloud(); 
+                    // Jangan update UI error, biarkan proses sync berjalan
+                } else {
+                    // Skenario C: Dua-duanya kosong (Aplikasi baru)
+                    updateSyncUI('success');
+                }
             })
             .catch(err => { 
                 console.log("Gagal load cloud, menggunakan data offline.");
@@ -296,13 +312,13 @@
                 <div class="flex flex-col items-center justify-center min-h-screen bg-blue-50 text-center p-6 fade-in">
                     <div class="mb-8 relative">
                         <div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden">
-                            <img src="${schoolData.logo}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'; this.onerror=null;" alt="Logo Sekolah" class="w-full h-full object-contain p-2">
+                            <img id="mainLogo" src="${schoolData.logo}" onerror="this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'; this.onerror=null;" alt="Logo Sekolah" class="w-full h-full object-contain p-2">
                         </div>
                     </div>
                     <h1 class="text-2xl font-bold text-blue-800 mb-2 leading-tight">${schoolData.name}</h1>
                     <p class="text-lg text-gray-600 font-medium mb-12">${schoolData.location}</p>
                     <button onclick="renderModeSelection()" class="btn-3d w-full max-w-xs bg-primary hover:bg-sky-400 text-white font-bold py-4 px-8 rounded-xl border-b-4 border-primary-dark text-xl shadow-lg">MULAI APLIKASI</button>
-                    <p class="absolute bottom-4 text-xs text-gray-400">Versi 14.0 (Persistence Fix)</p>
+                    <p class="absolute bottom-4 text-xs text-gray-400">Versi 15.0 (Smart Sync V2)</p>
                 </div>
             `;
             document.getElementById('appContent').innerHTML = html;
