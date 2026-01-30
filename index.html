@@ -100,37 +100,30 @@
         }
         function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Tenang, data aman di HP ini.`, 'info'); }
         
-        // --- SMART DATA SENDER (ANTI ERROR PALSU) ---
         function sendDataToScript(url, payload) {
             return fetch(url, {
                 method: 'POST',
-                // Text/Plain mencegah preflight CORS yang ketat
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify(payload)
             }).then(r => {
                 if(!r.ok) throw new Error("HTTP " + r.status);
                 return r.text();
             }).then(t => {
-                // CEK RESPON APA SAJA
-                // Jika respon mengandung indikator sukses atau bahkan echo data, anggap sukses.
-                if(t.includes('success') || t.includes('data=') || t.includes('%7B') || t.includes('<html')) {
-                    return {result:'success'};
-                }
                 try { return JSON.parse(t); } 
-                catch(e) { 
-                    // Jika gagal parse tapi tidak HTTP error, anggap sukses (silent success)
-                    console.warn("Respon tidak standar, tapi koneksi OK:", t.substring(0,30));
-                    return {result:'success'}; 
-                }
+                catch(e) { if(t.includes('success') || t.includes('data=') || t.includes('<html')) return {result:'success'}; throw new Error("Respon non-JSON"); }
             });
         }
         
         function syncToCloud() {
             if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); updateSyncUI('loading');
+            
+            // HYBRID SYNC: KIRIM TANPA FOTO (AGAR CEPAT & HEMAT)
+            const lightStudents = students.map(s => { const { photo, ...sisa } = s; return sisa; });
+            const lightSchoolData = { ...schoolData, logo: "" }; 
+            const payload = { schoolData: lightSchoolData, students: lightStudents, logs, behaviors };
+
             debounceTimer = setTimeout(() => {
-                const payload = { schoolData, students, logs, behaviors };
                 sendDataToScript(schoolData.apiUrl, payload).then(() => updateSyncUI('success')).catch(err => {
-                    // Fallback Blind Send
                     fetch(schoolData.apiUrl, { method: 'POST', mode: 'no-cors', headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) })
                     .then(() => updateSyncUI('success')).catch(e => updateSyncUI('error', 'Gagal Total'));
                 });
@@ -141,10 +134,13 @@
             if(!schoolData.apiUrl) return; updateSyncUI('loading');
             fetch(schoolData.apiUrl).then(r => r.json()).then(data => {
                 const cloudStudents = data.students || []; const localStudents = students || [];
-                // Prioritaskan Data yang Lebih Banyak/Lengkap
-                if (cloudStudents.length >= localStudents.length && cloudStudents.length > 0) {
-                    students = cloudStudents; if(data.logs) logs = data.logs; if(data.behaviors) behaviors = data.behaviors;
-                    if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; schoolData = data.schoolData; schoolData.apiUrl = myApi; }
+                if (cloudStudents.length > 0) {
+                    students = cloudStudents.map(cloudS => {
+                        const localS = localStudents.find(l => String(l.nis) === String(cloudS.nis));
+                        return { ...cloudS, photo: localS ? localS.photo : "" }; // Restore foto HP
+                    });
+                    if(data.logs) logs = data.logs; if(data.behaviors) behaviors = data.behaviors;
+                    if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; const myLogo = schoolData.logo; schoolData = data.schoolData; schoolData.apiUrl = myApi; schoolData.logo = myLogo; }
                     saveData(true); updateSyncUI('success'); if(document.getElementById('studentListContainer')) renderTeacherDashboard();
                 } else if (localStudents.length > 0) { syncToCloud(); } else { updateSyncUI('success'); }
             }).catch(e => updateSyncUI('error', 'Offline'));
@@ -154,20 +150,48 @@
             if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
             if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
             Swal.fire({ 
-                title: 'Menghubungi Server...', 
-                text: 'Mencoba menyimpan data...', 
-                didOpen: () => { 
+                title: 'Test Koneksi...', text: 'Mengirim data ke Spreadsheet...', didOpen: () => { 
                     Swal.showLoading(); 
-                    const payload = { schoolData, students, logs, behaviors }; 
+                    const payload = { schoolData: {name: schoolData.name, location: schoolData.location}, students: [{nis:"TEST-CONN", name:"Cek Koneksi", kelas:"-", dob:"", address:"-"}], logs: [], behaviors: behaviors }; 
                     sendDataToScript(url, payload).then(data => { 
-                        Swal.fire('Sukses!', 'Koneksi Berhasil! Cek Spreadsheet Anda.', 'success'); 
-                        schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; 
+                        Swal.fire('Sukses!', 'Koneksi Berhasil!', 'success'); schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; 
                     }).catch(err => { 
-                        let msg = err.message;
-                        if(msg.includes("Failed to fetch")) msg = "Koneksi diblokir. Pastikan Script di-Deploy sebagai 'Anyone' (Siapa Saja).";
+                        let msg = err.message; if(msg.includes("Failed")) msg = "Koneksi diblokir. Pastikan Script di-Deploy sebagai 'Anyone'.";
                         Swal.fire('Gagal', msg, 'error'); 
                     }); 
                 } 
+            });
+        }
+
+        // --- COMPRESSOR IMAGE ---
+        function compressImage(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        // Resize ke lebar 300px (Sangat ringan, cukup untuk pas foto HP)
+                        const maxWidth = 300;
+                        const scaleSize = maxWidth / img.width;
+                        const newWidth = maxWidth;
+                        const newHeight = img.height * scaleSize;
+
+                        canvas.width = newWidth;
+                        canvas.height = newHeight;
+                        
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                        
+                        // Compress JPEG quality 0.6
+                        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                        resolve(compressedDataUrl);
+                    };
+                    img.onerror = (err) => reject(err);
+                };
+                reader.onerror = (err) => reject(err);
             });
         }
 
@@ -190,7 +214,7 @@
                     <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button>
                     <div class="absolute bottom-6 text-center w-full">
                         <p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p>
-                        <p class="text-xs text-gray-400">Versi 23.0 (Smart Connection)</p>
+                        <p class="text-xs text-gray-400">Versi 25.0 (Auto-Compress)</p>
                     </div>
                 </div>
             `;
@@ -283,11 +307,35 @@
         function addPoint(nis, bid) { const b = behaviors.find(x => x.id === bid); logs.push({ id: Date.now(), studentId: nis, behaviorLabel: b.label, points: b.points, type: b.type, date: new Date().toISOString() }); saveData(); Swal.fire({ title: 'Poin Masuk', text: `${b.label} (${b.points})`, icon: 'success', timer: 800, showConfirmButton: false }).then(() => renderStudentDetail(nis)); }
         function addNoteOnly(nis) { const txt = document.getElementById('noteInput').value; if(!txt) return; logs.push({ id: Date.now(), studentId: nis, behaviorLabel: "Catatan Guru", points: 0, type: 'neutral', note: txt, date: new Date().toISOString() }); saveData(); Swal.fire('Terkirim', '', 'success').then(()=> renderStudentDetail(nis)); }
         function deleteStudent(nis) { Swal.fire({ title: 'Hapus?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya' }).then(r => { if(r.isConfirmed) { students = students.filter(s => String(s.nis) !== String(nis)); logs = logs.filter(l => String(l.studentId) !== String(nis)); saveData(); renderTeacherDashboard(); } }); }
-        function renderEditStudent(nis) { const student = students.find(s => String(s.nis) === String(nis)); if (!student) return; const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${student.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700">NIS</label><input type="text" value="${student.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div><div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${student.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700">Tanggal Lahir</label><input type="date" name="dob" value="${student.dob}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700">Alamat</label><textarea name="address" class="w-full p-3 rounded-lg border border-gray-300">${student.address}</textarea></div><div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div><button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold text-white">UPDATE</button><button type="button" onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button></form></div>`; document.getElementById('appContent').innerHTML = html; }
-        async function handleUpdateStudent(e, oldNis) { e.preventDefault(); const form = e.target; const index = students.findIndex(s => String(s.nis) === String(oldNis)); if (index === -1) return; let photoBase64 = students[index].photo; if (document.getElementById('photoInputEdit').files[0]) photoBase64 = await toBase64(document.getElementById('photoInputEdit').files[0]); students[index] = { ...students[index], name: form.name.value, kelas: form.kelas.value, dob: form.dob.value, address: form.address.value, photo: photoBase64 }; saveData(); Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetail(oldNis)); }
+        
+        function renderEditStudent(nis) { 
+            const student = students.find(s => String(s.nis) === String(nis)); if (!student) return; 
+            const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${student.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700">NIS</label><input type="text" value="${student.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div><div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${student.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700">Tanggal Lahir</label><input type="date" name="dob" value="${student.dob}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700">Alamat</label><textarea name="address" class="w-full p-3 rounded-lg border border-gray-300">${student.address}</textarea></div><div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div><button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold text-white">UPDATE</button><button type="button" onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button></form></div>`; 
+            document.getElementById('appContent').innerHTML = html; 
+        }
+
+        async function handleUpdateStudent(e, oldNis) { 
+            e.preventDefault(); const form = e.target; const index = students.findIndex(s => String(s.nis) === String(oldNis)); if (index === -1) return; 
+            
+            const processUpdate = (photo) => {
+                students[index] = { ...students[index], name: form.name.value, kelas: form.kelas.value, dob: form.dob.value, address: form.address.value, photo: photo }; 
+                saveData(); 
+                Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetail(oldNis));
+            };
+
+            const fileInput = document.getElementById('photoInputEdit');
+            if (fileInput.files[0]) { 
+                // Compress before saving
+                compressImage(fileInput.files[0]).then(res => processUpdate(res));
+            } else {
+                processUpdate(students[index].photo); // Keep old photo
+            }
+        }
+        
         function renderSetup() { const html = `<div class="pt-20 px-6 fade-in pb-10"><h2 class="text-2xl font-bold text-gray-800 mb-4">Pengaturan</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4"><h3 class="font-bold text-blue-800 mb-2">Sinkronisasi Spreadsheet</h3><input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2"><button onclick="saveApiUrl()" class="btn-3d btn-blue px-4 py-2 rounded-lg text-sm font-bold w-full">Simpan & Test</button></div><div class="space-y-3"><div><label class="block text-sm font-bold">Nama Sekolah</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-2 border rounded"></div><div><label class="block text-sm font-bold">Lokasi</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-2 border rounded"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold text-white">Simpan Profil</button></div><div class="mt-8 border-t pt-4"><button onclick="resetAll()" class="w-full py-3 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div><div class="text-center mt-4"><button onclick="renderTeacherDashboard()" class="text-gray-500 underline">Kembali</button></div></div>`; document.getElementById('appContent').innerHTML = html; }
         function saveApiUrl() { let url = document.getElementById('apiUrlInput').value; if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; schoolData.apiUrl = url; saveData(true); forceTestWrite(url); }
         function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; saveData(); Swal.fire('Tersimpan', '', 'success'); }
+        
         function renderAddStudent() { const html = `<div class="pt-20 px-6 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><form onsubmit="handleAddSubmit(event)" class="space-y-3"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div><input type="date" name="dob" class="w-full p-3 border rounded"><textarea name="address" placeholder="Alamat Lengkap" class="w-full p-3 border rounded" rows="2"></textarea><div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div><input type="file" id="photoInput" class="w-full p-2 bg-white rounded border"><button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button></form><button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button></div>`; document.getElementById('appContent').innerHTML = html; }
         
         function handleAddSubmit(e) { 
@@ -300,13 +348,25 @@
                 btn.disabled = false; btn.innerText = "Simpan";
                 return Swal.fire('Gagal', 'NIS sudah ada', 'error'); 
             }
+            
+            // Photo Handling with Auto Compression
             const photoInput = document.getElementById('photoInput'); 
             const saveProcess = (photo) => { 
                 students.push({ name: f.name.value, nis: f.nis.value, kelas: f.kelas.value, dob: f.dob.value, address: f.address.value, photo: photo }); 
                 saveData(); 
                 Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); 
             }; 
-            if(photoInput.files[0]) { toBase64(photoInput.files[0]).then(res => saveProcess(res)); } 
+            
+            if(photoInput.files[0]) { 
+                Swal.fire({title: 'Mengompresi Foto...', didOpen: () => Swal.showLoading()});
+                compressImage(photoInput.files[0]).then(res => {
+                    Swal.close();
+                    saveProcess(res);
+                }).catch(err => {
+                    Swal.close();
+                    saveProcess(""); // Save without photo if fail
+                });
+            } 
             else { saveProcess(""); } 
         }
         
