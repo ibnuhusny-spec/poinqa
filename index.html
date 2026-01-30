@@ -48,7 +48,7 @@
 
     <div id="loader"><div class="spinner mb-4"></div><p class="font-bold text-blue-500 animate-pulse" id="loaderText">Memuat...</p></div>
 
-    <!-- Hidden Iframe for Form Submission (The Secret Weapon) -->
+    <!-- Hidden Iframe for Robust Sending -->
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
     <form id="syncForm" method="POST" target="hidden_iframe" style="display:none;"><input type="hidden" name="data" id="syncDataInput"></form>
 
@@ -101,11 +101,23 @@
             else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Tersimpan"; setTimeout(() => { if(txt.innerText === "Tersimpan") txt.innerText = "Cloud Aktif"; }, 3000); }
             else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
         }
-        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data tetap aman di HP.`, 'info'); }
+        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data aman di HP.`, 'info'); }
         
         function sendDataToScript(url, payload) {
-            const formData = new URLSearchParams(); formData.append('data', JSON.stringify(payload));
-            return fetch(url, { method: 'POST', body: formData }).then(r => { if(!r.ok) throw new Error(r.status); return r.text(); }).then(t => { try { return JSON.parse(t); } catch(e) { return {result:'success'}; } });
+            return fetch(url, {
+                method: 'POST',
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(payload)
+            }).then(r => {
+                if(!r.ok) throw new Error("HTTP Error " + r.status);
+                return r.text();
+            }).then(t => {
+                try { return JSON.parse(t); } 
+                catch(e) { 
+                    if(t.includes('success') || t.includes('data=') || t.includes('<html')) return {result:'success'};
+                    throw new Error("Respon non-JSON"); 
+                }
+            });
         }
         
         function syncToCloud() {
@@ -133,33 +145,40 @@
             }, 2000);
         }
         
-        // --- FIXED LOAD LOGIC: FORCE REFRESH ---
+        // --- MASTER SYNC: ALWAYS PULL FROM CLOUD ---
         function loadFromCloud() {
             if(!schoolData.apiUrl) return; 
             updateSyncUI('loading');
             
-            // Add timestamp to prevent caching
+            // Add timestamp to prevent caching - INI PENTING
             const fetchUrl = schoolData.apiUrl + (schoolData.apiUrl.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
 
             fetch(fetchUrl)
             .then(r => r.json())
             .then(data => {
                 const cloudStudents = data.students || [];
-                const localStudents = students || [];
                 
-                // PRIORITASKAN CLOUD JIKA LOKAL KOSONG ATAU CLOUD LEBIH LENGKAP
-                // Pada device baru, lokal pasti 0. Jadi dia akan paksa ambil dari Cloud.
+                // LOGIKA MASTER SYNC: 
+                // Jika Cloud ada isinya, TIMPA data HP (kecuali foto yang tidak ada di cloud).
+                // Ini memastikan semua guru melihat data yang SAMA.
+                
                 if (cloudStudents.length > 0) {
-                    console.log("Mengambil data dari Cloud...");
+                    console.log("Master Sync: Menimpa data lokal dengan data Server.");
+                    const localStudents = students || [];
+                    
+                    // Update Students
                     students = cloudStudents.map(cloudS => {
-                        // Coba cari foto di lokal dulu (karena cloud tidak simpan foto)
+                        // Cari foto dari data lokal lama
                         const localS = localStudents.find(l => String(l.nis) === String(cloudS.nis));
                         return { ...cloudS, photo: localS ? localS.photo : "" };
                     });
                     
+                    // Update Logs & Behaviors (Item Poin)
                     if(data.logs) logs = data.logs; 
-                    if(data.behaviors) behaviors = data.behaviors;
+                    // PENTING: Update item poin dari cloud agar semua guru sama
+                    if(data.behaviors && data.behaviors.length > 0) behaviors = data.behaviors;
                     
+                    // Update Settings
                     if(data.schoolData && data.schoolData.name) { 
                         const myApi = schoolData.apiUrl; 
                         const myLogo = schoolData.logo; 
@@ -171,14 +190,13 @@
                     saveData(true); 
                     updateSyncUI('success'); 
                     if(document.getElementById('studentListContainer')) renderTeacherDashboard();
+                } else if (students.length > 0) {
+                    // Jika Cloud Kosong tapi HP ada isi -> Kirim ke Cloud (Inisialisasi)
+                    console.log("Cloud Kosong -> Push Data Lokal");
+                    syncToCloud();
+                    updateSyncUI('success');
                 } else {
-                    console.log("Cloud kosong/tidak ada siswa. Menggunakan data lokal.");
-                    // Jika cloud kosong, tapi lokal ada, kirim ke cloud
-                    if (localStudents.length > 0) {
-                        syncToCloud();
-                    } else {
-                        updateSyncUI('success');
-                    }
+                    updateSyncUI('success');
                 }
             }).catch(e => {
                 console.error(e);
@@ -207,7 +225,6 @@
             });
         }
 
-        // --- COMPRESSOR ---
         function compressImage(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -227,12 +244,9 @@
             });
         }
 
-        // --- BACKUP & RESTORE ---
         function downloadBackup() { const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors})); const downloadAnchorNode = document.createElement('a'); downloadAnchorNode.setAttribute("href", dataStr); downloadAnchorNode.setAttribute("download", "Backup_Poin_" + new Date().toISOString().slice(0,10) + ".json"); document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove(); }
         function triggerRestore() { document.getElementById('restoreInput').click(); }
         function handleRestore(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function(e) { try { const data = JSON.parse(e.target.result); if(data.students && data.logs) { students = data.students; logs = data.logs; behaviors = data.behaviors || behaviors; if(data.schoolData) schoolData = data.schoolData; saveData(true); Swal.fire('Berhasil', 'Data dipulihkan.', 'success').then(() => location.reload()); } else { Swal.fire('Gagal', 'Format salah.', 'error'); } } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); } }; reader.readAsText(file); }
-
-        // --- VIEWS ---
 
         function renderSplash() {
             document.getElementById('globalHeader').classList.add('hidden');
@@ -251,7 +265,7 @@
                     <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button>
                     <div class="absolute bottom-6 text-center w-full">
                         <p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p>
-                        <p class="text-xs text-gray-400">Versi 31.1 (Force Pull)</p>
+                        <p class="text-xs text-gray-400">Versi 32.0 (Master Sync)</p>
                     </div>
                 </div>
             `;
@@ -264,7 +278,6 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
-        // --- PASSWORD CHECK ---
         function checkTeacherPassword() {
             Swal.fire({
                 title: 'Password Guru',
@@ -294,14 +307,12 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
-        // --- STUDENT DETAIL (FIXED QUOTES) ---
         function renderStudentDetail(nis) {
             const student = students.find(s => String(s.nis) === String(nis));
             if(!student) return;
             const points = logs.filter(l => String(l.studentId) === String(nis)).reduce((sum, c) => sum + c.points, 0);
             
             const sortedBehaviors = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1));
-            // FIX: Removed extra quote in onclick
             const good = sortedBehaviors.filter(b => b.type === 'plus').map(b => `<button onclick="addPoint('${nis}', ${b.id})" class="item-card item-good p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-good px-2 rounded-full">+${b.points}</span></button>`).join('');
             const bad = sortedBehaviors.filter(b => b.type === 'minus').map(b => `<button onclick="addPoint('${nis}', ${b.id})" class="item-card item-bad p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-bad px-2 rounded-full">${b.points}</span></button>`).join('');
             
@@ -398,7 +409,6 @@
                         <input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2">
                         <div class="flex gap-2">
                             <button onclick="saveApiUrl()" class="flex-1 btn-3d btn-blue px-2 py-2 rounded-lg text-sm font-bold">Simpan & Test</button>
-                            <button onclick="loadFromCloud()" class="flex-1 btn-3d btn-purple px-2 py-2 rounded-lg text-sm font-bold">Paksa Ambil</button>
                         </div>
                     </div>
                     
