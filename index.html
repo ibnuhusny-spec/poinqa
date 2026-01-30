@@ -122,10 +122,12 @@
             else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
         }
         function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data aman di HP.`, 'info'); }
+        
         function sendDataToScript(url, payload) {
             const formData = new URLSearchParams(); formData.append('data', JSON.stringify(payload));
             return fetch(url, { method: 'POST', body: formData }).then(r => { if(!r.ok) throw new Error(r.status); return r.text(); }).then(t => { try { return JSON.parse(t); } catch(e) { return {result:'success'}; } });
         }
+        
         function syncToCloud() {
             if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); updateSyncUI('loading');
             debounceTimer = setTimeout(() => {
@@ -136,6 +138,7 @@
                 });
             }, 2000);
         }
+        
         function loadFromCloud() {
             if(!schoolData.apiUrl) return; updateSyncUI('loading');
             fetch(schoolData.apiUrl).then(r => r.json()).then(data => {
@@ -147,10 +150,26 @@
                 } else if (localStudents.length > 0) { syncToCloud(); } else { updateSyncUI('success'); }
             }).catch(e => updateSyncUI('error', 'Offline'));
         }
+        
         function forceTestWrite(url) {
             if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
             if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
-            Swal.fire({ title: 'Test Koneksi...', didOpen: () => { Swal.showLoading(); const payload = { schoolData, students, logs, behaviors }; sendDataToScript(url, payload).then(data => { Swal.fire('Sukses!', 'Koneksi Spreadsheet Berhasil.', 'success'); schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; }).catch(err => { Swal.fire('Gagal', 'Cek koneksi.', 'error'); }); } });
+            Swal.fire({ 
+                title: 'Test Koneksi...', 
+                text: 'Mengirim data HP ke Spreadsheet...',
+                didOpen: () => { 
+                    Swal.showLoading(); 
+                    // KIRIM DATA LOKAL SAAT INI (bukan dummy)
+                    const payload = { schoolData, students, logs, behaviors }; 
+                    sendDataToScript(url, payload).then(data => { 
+                        Swal.fire('Sukses!', 'Data berhasil dikirim ke Spreadsheet.', 'success'); 
+                        schoolData.apiUrl = url; saveData(true); 
+                        document.querySelector('input[name="apiUrl"]').value = url; 
+                    }).catch(err => { 
+                        Swal.fire('Gagal', 'Koneksi ditolak. Pastikan Script di-Deploy sebagai "Anyone" (Siapa Saja).', 'error'); 
+                    }); 
+                } 
+            });
         }
 
         // --- VIEWS ---
@@ -172,7 +191,7 @@
                     <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button>
                     <div class="absolute bottom-6 text-center w-full">
                         <p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p>
-                        <p class="text-xs text-gray-400">Versi 19.0 (Fixed UI)</p>
+                        <p class="text-xs text-gray-400">Versi 20.0 (Sorted & Fixes)</p>
                     </div>
                 </div>
             `;
@@ -213,8 +232,11 @@
             const student = students.find(s => String(s.nis) === String(nis));
             if(!student) return;
             const points = logs.filter(l => String(l.studentId) === String(nis)).reduce((sum, c) => sum + c.points, 0);
+            
+            // SORTED: Green First, Red Last
             const good = behaviors.filter(b => b.type === 'plus').map(b => `<button onclick="addPoint('${nis}', ${b.id})" class="item-card item-good p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-good px-2 rounded-full">+${b.points}</span></button>`).join('');
             const bad = behaviors.filter(b => b.type === 'minus').map(b => `<button onclick="addPoint('${nis}', ${b.id})" class="item-card item-bad p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-bad px-2 rounded-full">${b.points}</span></button>`).join('');
+            
             const html = `<div class="pt-20 px-4 pb-10 fade-in"><div class="bg-white rounded-2xl shadow-lg p-5 mb-6 text-center relative overflow-hidden"><div class="absolute top-0 left-0 w-full h-20 bg-blue-500"></div><div class="absolute top-2 right-2 flex gap-2 z-20"><button onclick="renderEditStudent('${nis}')" class="btn-3d btn-yellow p-2 rounded-lg text-xs font-bold"><i class="fas fa-edit"></i></button><button onclick="deleteStudent('${nis}')" class="btn-3d btn-red p-2 rounded-lg text-xs font-bold"><i class="fas fa-trash"></i></button></div><div class="relative z-10 w-24 h-24 mx-auto bg-white rounded-full p-1 shadow-md -mb-12 mt-4"><img src="${student.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full rounded-full object-cover"></div><div class="mt-14"><h2 class="text-xl font-bold text-gray-800">${student.name}</h2><p class="text-gray-500 text-sm">${student.kelas} | ${student.nis}</p><div class="mt-4 inline-block px-6 py-2 rounded-full ${points>=0?'bg-green-100 text-green-700':'bg-red-100 text-red-700'} font-black text-2xl border-2 border-opacity-20 border-black">${points} Poin</div></div></div><div class="flex mb-4 bg-gray-200 p-1 rounded-xl"><button onclick="showTab('good', this)" class="flex-1 py-2 text-sm font-bold rounded-lg btn-green text-white shadow-sm transition">Positif</button><button onclick="showTab('bad', this)" class="flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition">Negatif</button><button onclick="showTab('note', this)" class="flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition">Catatan</button></div><div id="tab-good" class="tab-content grid grid-cols-2 gap-3">${good}</div><div id="tab-bad" class="tab-content grid grid-cols-2 gap-3 hidden">${bad}</div><div id="tab-note" class="tab-content hidden"><textarea id="noteInput" rows="3" class="w-full p-3 rounded-lg border" placeholder="Catatan untuk wali murid..."></textarea><button onclick="addNoteOnly('${nis}')" class="btn-3d btn-blue w-full mt-3 py-2 rounded-lg font-bold">Kirim Catatan</button><div class="mt-4 text-xs text-gray-500">Riwayat Catatan:</div><div class="space-y-2 mt-2">${logs.filter(l => String(l.studentId) === String(student.nis) && l.behaviorLabel === "Catatan Guru").slice(-3).reverse().map(l => `<div class="bg-blue-50 p-2 rounded text-xs text-gray-700 border border-blue-100">"${l.note}"</div>`).join('')}</div></div><div class="text-center mt-6"><button onclick="renderTeacherDashboard()" class="text-gray-500 font-bold underline">Kembali</button></div></div>`;
             document.getElementById('appContent').innerHTML = html;
         }
@@ -242,11 +264,21 @@
             container.innerHTML = html;
         }
 
+        // --- MANAGE BEHAVIORS (SORTED) ---
         function renderManageBehaviors() {
+            // Sort: Plus first
+            const sortedBehaviors = [...behaviors].sort((a, b) => {
+                if (a.type === b.type) return 0;
+                return a.type === 'plus' ? -1 : 1;
+            });
+
             let listHTML = '';
-            behaviors.forEach((b, idx) => {
+            sortedBehaviors.forEach((b) => {
                 const colorClass = b.type === 'plus' ? 'btn-green' : 'btn-red';
-                listHTML += `<div class="flex justify-between items-center mb-2"><div class="btn-3d ${colorClass} flex-grow p-3 rounded-lg text-left flex justify-between items-center mr-2"><span><i class="fas ${b.icon} mr-2"></i>${b.label}</span><span class="bg-white text-gray-800 px-2 rounded text-xs font-bold">${b.points}</span></div><button onclick="delBehavior(${idx})" class="btn-3d btn-gray p-3 rounded-lg"><i class="fas fa-trash"></i></button></div>`;
+                // Use original index for deletion needs careful handling, better filter by ID but simple array splice by ID logic:
+                const realIdx = behaviors.findIndex(x => x.id === b.id);
+                
+                listHTML += `<div class="flex justify-between items-center mb-2"><div class="btn-3d ${colorClass} flex-grow p-3 rounded-lg text-left flex justify-between items-center mr-2"><span><i class="fas ${b.icon} mr-2"></i>${b.label}</span><span class="bg-white text-gray-800 px-2 rounded text-xs font-bold">${b.points}</span></div><button onclick="delBehavior(${realIdx})" class="btn-3d btn-gray p-3 rounded-lg"><i class="fas fa-trash"></i></button></div>`;
             });
             const html = `<div class="pt-20 px-6 pb-10"><h2 class="text-xl font-bold mb-4">Atur Poin</h2><div class="space-y-1 mb-4">${listHTML}</div><button onclick="addNewBehaviorPrompt()" class="btn-3d btn-blue w-full py-3 rounded-lg mb-4">Tambah Item Baru</button><button onclick="renderTeacherDashboard()" class="w-full py-3 border rounded text-gray-500">Kembali</button></div>`;
             document.getElementById('appContent').innerHTML = html;
@@ -259,8 +291,8 @@
                     <input id="l" class="swal2-input" placeholder="Nama Perilaku">
                     <input id="p" type="number" class="swal2-input" placeholder="Nilai Poin (Misal: 5)">
                     <select id="t" class="swal2-input">
-                        <option value="plus">Jenis: Positif</option>
-                        <option value="minus">Jenis: Negatif</option>
+                        <option value="plus">Jenis: Positif (Hijau)</option>
+                        <option value="minus">Jenis: Negatif (Merah)</option>
                     </select>
                 `,
                 preConfirm: () => {
@@ -268,7 +300,6 @@
                     let points = parseInt(document.getElementById('p').value);
                     const type = document.getElementById('t').value;
                     if(!label || !points) return;
-                    // Auto fix sign
                     points = Math.abs(points);
                     if(type === 'minus') points = -points;
                     behaviors.push({id: Date.now(), label, points, type, icon: 'fa-star'});
@@ -283,11 +314,17 @@
         function deleteStudent(nis) { Swal.fire({ title: 'Hapus?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya' }).then(r => { if(r.isConfirmed) { students = students.filter(s => String(s.nis) !== String(nis)); logs = logs.filter(l => String(l.studentId) !== String(nis)); saveData(); renderTeacherDashboard(); } }); }
         function renderEditStudent(nis) { const student = students.find(s => String(s.nis) === String(nis)); if (!student) return; const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${student.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700">NIS</label><input type="text" value="${student.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div><div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${student.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700">Tanggal Lahir</label><input type="date" name="dob" value="${student.dob}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700">Alamat</label><textarea name="address" class="w-full p-3 rounded-lg border border-gray-300">${student.address}</textarea></div><div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div><button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold text-white">UPDATE</button><button type="button" onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button></form></div>`; document.getElementById('appContent').innerHTML = html; }
         async function handleUpdateStudent(e, oldNis) { e.preventDefault(); const form = e.target; const index = students.findIndex(s => String(s.nis) === String(oldNis)); if (index === -1) return; let photoBase64 = students[index].photo; if (document.getElementById('photoInputEdit').files[0]) photoBase64 = await toBase64(document.getElementById('photoInputEdit').files[0]); students[index] = { ...students[index], name: form.name.value, kelas: form.kelas.value, dob: form.dob.value, address: form.address.value, photo: photoBase64 }; saveData(); Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetail(oldNis)); }
-        function renderSetup() { const html = `<div class="pt-20 px-6 fade-in pb-10"><h2 class="text-2xl font-bold text-gray-800 mb-4">Pengaturan</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4"><h3 class="font-bold text-blue-800 mb-2">Sinkronisasi Spreadsheet</h3><input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2"><button onclick="saveApiUrl()" class="btn-3d btn-blue px-4 py-2 rounded-lg text-sm font-bold w-full">Simpan & Test</button></div><div class="space-y-3"><div><label class="block text-sm font-bold">Nama Sekolah</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-2 border rounded"></div><div><label class="block text-sm font-bold">Lokasi</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-2 border rounded"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold text-white">Simpan Profil</button></div><div class="mt-8 border-t pt-4"><button onclick="resetAll()" class="w-full py-3 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div><div class="text-center mt-4"><button onclick="renderTeacherDashboard()" class="text-gray-500 underline">Kembali</button></div></div>`; document.getElementById('appContent').innerHTML = html; }
+        function renderSetup() { const html = `<div class="pt-20 px-6 fade-in pb-10"><h2 class="text-2xl font-bold text-gray-800 mb-4">Pengaturan</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4"><h3 class="font-bold text-blue-800 mb-2">Sinkronisasi Spreadsheet</h3><input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2"><button onclick="saveApiUrl()" class="btn-3d btn-blue px-4 py-2 rounded-lg text-sm font-bold w-full">Simpan & Test</button></div><div class="space-y-3"><div><label class="block text-sm font-bold">Nama Sekolah</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-2 border rounded"></div><div><label class="block text-sm font-bold">Lokasi</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-2 border rounded"></div><div><label class="block text-sm font-bold">Logo (Nama File)</label><input type="text" id="sLogo" value="${schoolData.logo}" class="w-full p-2 border rounded" placeholder="logo.png"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold text-white">Simpan Profil</button></div><div class="mt-8 border-t pt-4"><button onclick="resetAll()" class="w-full py-3 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div><div class="text-center mt-4"><button onclick="renderTeacherDashboard()" class="text-gray-500 underline">Kembali</button></div></div>`; document.getElementById('appContent').innerHTML = html; }
         function saveApiUrl() { let url = document.getElementById('apiUrlInput').value; if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; schoolData.apiUrl = url; saveData(true); forceTestWrite(url); }
-        function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; saveData(); Swal.fire('Tersimpan', '', 'success'); }
+        function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; schoolData.logo = document.getElementById('sLogo').value; saveData(); Swal.fire('Tersimpan', '', 'success'); }
         function renderAddStudent() { const html = `<div class="pt-20 px-6 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><form onsubmit="handleAddSubmit(event)" class="space-y-3"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div><input type="date" name="dob" class="w-full p-3 border rounded"><textarea name="address" placeholder="Alamat Lengkap" class="w-full p-3 border rounded" rows="2"></textarea><div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div><input type="file" id="photoInput" class="w-full p-2 bg-white rounded border"><button class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button></form><button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button></div>`; document.getElementById('appContent').innerHTML = html; }
-        function handleAddSubmit(e) { e.preventDefault(); const f = e.target; if(students.find(s => String(s.nis) === String(f.nis.value))) return Swal.fire('Error', 'NIS sudah ada', 'error'); const photoInput = document.getElementById('photoInput'); const saveProcess = (photo) => { students.push({ name: f.name.value, nis: f.nis.value, kelas: f.kelas.value, dob: f.dob.value, address: f.address.value, photo: photo }); saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); }; if(photoInput.files[0]) { toBase64(photoInput.files[0]).then(res => saveProcess(res)); } else { saveProcess(""); } }
+        function handleAddSubmit(e) { e.preventDefault(); const f = e.target; 
+            // Fix: Clean trim check
+            if(students.find(s => String(s.nis).trim() === String(f.nis.value).trim())) return Swal.fire('Error', 'NIS sudah ada', 'error'); 
+            const photoInput = document.getElementById('photoInput'); 
+            const saveProcess = (photo) => { students.push({ name: f.name.value, nis: f.nis.value, kelas: f.kelas.value, dob: f.dob.value, address: f.address.value, photo: photo }); saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); }; 
+            if(photoInput.files[0]) { toBase64(photoInput.files[0]).then(res => saveProcess(res)); } else { saveProcess(""); } 
+        }
         function resetAll() { localStorage.clear(); location.reload(); }
         function exportToExcel() { if(logs.length===0) return Swal.fire('Info', 'Data kosong', 'info'); const d = logs.map(l => ({...l})); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d), "Data"); XLSX.writeFile(wb, "DataPoin.xlsx"); }
 
@@ -304,7 +341,7 @@
 
             const html = `
                 <div class="pt-20 px-6 pb-10 fade-in">
-                    <!-- PROFILE CARD -->
+                    <!-- PROFILE CARD (FIXED) -->
                     <div class="bg-white p-6 rounded-xl shadow-lg text-center mb-6">
                         <div class="w-24 h-24 mx-auto bg-gray-200 rounded-full mb-3 overflow-hidden border-4 border-blue-100">
                             <img src="${s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full object-cover">
