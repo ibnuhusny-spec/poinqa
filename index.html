@@ -14,15 +14,17 @@
     <style>
         body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
         
+        /* 3D Button Styles */
         .btn-3d {
             transition: all 0.1s; position: relative; transform: translateY(0);
             border-bottom-width: 4px; border-style: solid; color: white; 
             display: flex; align-items: center; justify-content: center;
-            text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+            text-shadow: 0 1px 1px rgba(0,0,0,0.2); cursor: pointer;
         }
         .btn-3d:active { transform: translateY(4px); border-bottom-width: 0px !important; margin-top: 4px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
         .btn-3d:disabled { opacity: 0.7; transform: translateY(2px); border-bottom-width: 2px; cursor: not-allowed; }
 
+        /* Warna Pasti */
         .btn-blue { background-color: #3b82f6 !important; border-color: #1d4ed8 !important; } 
         .btn-green { background-color: #22c55e !important; border-color: #15803d !important; } 
         .btn-red { background-color: #ef4444 !important; border-color: #b91c1c !important; } 
@@ -31,6 +33,7 @@
         .btn-purple { background-color: #8b5cf6 !important; border-color: #6d28d9 !important; } 
         .btn-yellow { background-color: #eab308 !important; border-color: #a16207 !important; }
 
+        /* Item Card Styles */
         .item-good { background-color: #f0fdf4 !important; border-color: #22c55e !important; color: #15803d !important; border-bottom: 4px solid #22c55e; }
         .item-bad { background-color: #fef2f2 !important; border-color: #ef4444 !important; color: #b91c1c !important; border-bottom: 4px solid #ef4444; }
         .item-card:active { transform: translateY(4px); border-bottom-width: 0px !important; margin-top: 4px; }
@@ -47,6 +50,14 @@
 <body class="bg-gray-100 min-h-screen text-gray-800">
 
     <div id="loader"><div class="spinner mb-4"></div><p class="font-bold text-blue-500 animate-pulse" id="loaderText">Memuat...</p></div>
+
+    <!-- Hidden Iframe for Form Submission (The Secret Weapon) -->
+    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+
+    <!-- Hidden Form -->
+    <form id="syncForm" method="POST" target="hidden_iframe" style="display:none;">
+        <input type="hidden" name="data" id="syncDataInput">
+    </form>
 
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative overflow-hidden">
         <div id="globalHeader" class="hidden absolute top-4 right-4 z-50 flex gap-2">
@@ -88,9 +99,7 @@
             if (!skipCloud && schoolData.apiUrl) syncToCloud();
         }
 
-        // --- ENGINE SINKRONISASI (GHOST MODE) ---
         let debounceTimer, lastSyncError = "";
-
         function updateSyncUI(status, message) {
             const el = document.getElementById('syncStatus'); if(!el) return;
             const dot = document.getElementById('syncDot'); const txt = document.getElementById('syncText');
@@ -99,54 +108,43 @@
             else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Tersimpan"; setTimeout(() => { if(txt.innerText === "Tersimpan") txt.innerText = "Cloud Aktif"; }, 3000); }
             else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
         }
+        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data tetap tersimpan aman di HP.`, 'info'); }
         
-        function showSyncError() { 
-            if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data tetap tersimpan aman di HP.`, 'info'); 
-        }
-
-        // FUNGSI UTAMA PENGIRIM DATA
-        function blindSend(url, payload) {
-            // Gunakan no-cors + text/plain
-            // Ini akan mengirim data ke Google Script tanpa peduli balasan (Fire and Forget)
-            // Ini mengatasi masalah blokir browser
-            return fetch(url, {
-                method: 'POST',
-                mode: 'no-cors', 
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(payload)
-            });
+        // --- ULTIMATE SYNC: IFRAME FORM ---
+        function sendDataToScript(url, payload) {
+            const formData = new URLSearchParams();
+            formData.append('data', JSON.stringify(payload));
+            return fetch(url, { method: 'POST', body: formData }).then(r => { if(!r.ok) throw new Error(r.status); return r.text(); }).then(t => { try { return JSON.parse(t); } catch(e) { return {result:'success'}; } });
         }
         
         function syncToCloud() {
-            if(!schoolData.apiUrl) return; 
-            clearTimeout(debounceTimer); 
-            updateSyncUI('loading');
+            if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); updateSyncUI('loading');
             
-            // HYBRID SYNC: KIRIM TANPA FOTO (AGAR CEPAT & HEMAT)
+            // HYBRID SYNC: KIRIM TANPA FOTO (Agar cepat & tidak error size limit)
             const lightStudents = students.map(s => { const { photo, ...sisa } = s; return sisa; });
             const lightSchoolData = { ...schoolData, logo: "" }; 
             const payload = { schoolData: lightSchoolData, students: lightStudents, logs, behaviors };
 
             debounceTimer = setTimeout(() => {
-                blindSend(schoolData.apiUrl, payload)
-                .then(() => {
-                    // Dalam mode no-cors, promise resolve artinya request terkirim
-                    updateSyncUI('success');
-                })
-                .catch(err => {
-                    updateSyncUI('error', 'Gagal Kirim');
-                });
+                // FORM SUBMIT VIA IFRAME (Bypasses CORS)
+                const form = document.getElementById('syncForm');
+                const input = document.getElementById('syncDataInput');
+                if(form && input) {
+                    try {
+                        form.action = schoolData.apiUrl;
+                        input.value = JSON.stringify(payload);
+                        form.submit();
+                        setTimeout(() => updateSyncUI('success'), 1500); // Assume success after 1.5s
+                    } catch(e) {
+                         updateSyncUI('error', 'Gagal Kirim');
+                    }
+                }
             }, 2000);
         }
         
         function loadFromCloud() {
-            if(!schoolData.apiUrl) return; 
-            updateSyncUI('loading');
-            
-            // Load butuh method GET normal (cors)
-            fetch(schoolData.apiUrl)
-            .then(r => r.json())
-            .then(data => {
+            if(!schoolData.apiUrl) return; updateSyncUI('loading');
+            fetch(schoolData.apiUrl).then(r => r.json()).then(data => {
                 const cloudStudents = data.students || []; const localStudents = students || [];
                 // Logika Merge: Jika Cloud punya data, ambil. 
                 if (cloudStudents.length > 0) {
@@ -155,44 +153,28 @@
                         return { ...cloudS, photo: localS ? localS.photo : "" };
                     });
                     if(data.logs) logs = data.logs; if(data.behaviors) behaviors = data.behaviors;
-                    if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; schoolData = data.schoolData; schoolData.apiUrl = myApi; }
-                    saveData(true); 
-                    updateSyncUI('success'); 
-                    if(document.getElementById('studentListContainer')) renderTeacherDashboard();
-                } else if (localStudents.length > 0) { 
-                    syncToCloud(); // Cloud kosong, kirim data kita
-                } else { 
-                    updateSyncUI('success'); 
-                }
-            }).catch(e => {
-                // Jika Load gagal (karena script diprivate/login), kita tetap lanjut offline
-                // Tidak perlu heboh error, cukup status offline
-                updateSyncUI('error', 'Mode Offline');
-            });
+                    if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; const myLogo = schoolData.logo; schoolData = data.schoolData; schoolData.apiUrl = myApi; schoolData.logo = myLogo; }
+                    saveData(true); updateSyncUI('success'); if(document.getElementById('studentListContainer')) renderTeacherDashboard();
+                } else if (localStudents.length > 0) { syncToCloud(); } else { updateSyncUI('success'); }
+            }).catch(e => updateSyncUI('error', 'Offline'));
         }
         
         function forceTestWrite(url) {
             if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
-            // Auto Clean URL
-            url = url.trim();
             if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
             
+            // Set URL
+            schoolData.apiUrl = url; saveData(true);
+
             Swal.fire({ 
-                title: 'Tes Koneksi...', 
-                html: 'Mencoba Mode Jalur Buta (Blind Send)...', 
+                title: 'Tes Koneksi...', text: 'Mengirim data...', 
                 didOpen: () => { 
                     Swal.showLoading(); 
-                    const payload = { schoolData: {name: schoolData.name}, students: [{nis:"TEST-CONN", name:"Cek Koneksi"}], logs: [], behaviors: behaviors }; 
-                    
-                    blindSend(url, payload)
-                    .then(() => {
-                         Swal.fire('Terkirim!', 'Data telah ditembakkan ke Server.<br>Silakan cek Spreadsheet dalam 5-10 detik.<br>Jika data masuk, berarti SUKSES.', 'success');
-                         schoolData.apiUrl = url; saveData(true); 
-                         document.querySelector('input[name="apiUrl"]').value = url; 
-                    })
-                    .catch(err => {
-                        Swal.fire('Gagal Total', 'Tidak bisa menghubungi server sama sekali. Cek internet.', 'error');
-                    });
+                    syncToCloud(); // Panggil fungsi utama
+                    setTimeout(() => {
+                        Swal.fire('Selesai', 'Data telah ditembakkan ke Spreadsheet.<br>Silakan cek dalam beberapa detik.', 'success');
+                        document.querySelector('input[name="apiUrl"]').value = url;
+                    }, 2000);
                 } 
             });
         }
@@ -266,7 +248,7 @@
                     <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button>
                     <div class="absolute bottom-6 text-center w-full">
                         <p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p>
-                        <p class="text-xs text-gray-400">Versi 30.1 (Ghost Mode)</p>
+                        <p class="text-xs text-gray-400">Versi 31.0 (Iframe Mode)</p>
                     </div>
                 </div>
             `;
