@@ -19,18 +19,18 @@
     <style>
         body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
         
-        /* --- 3D BUTTON STYLES (DIPERBAIKI) --- */
+        /* 3D Button Styles */
         .btn-3d {
             transition: all 0.1s; 
             position: relative; 
             transform: translateY(0);
             border-bottom-width: 4px;
             border-style: solid;
-            color: white; /* Default text white */
+            color: white; 
             display: flex;
             align-items: center;
             justify-content: center;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            text-shadow: 0 1px 1px rgba(0,0,0,0.2);
         }
         .btn-3d:active { 
             transform: translateY(4px); 
@@ -39,49 +39,32 @@
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
         }
 
-        /* WARNA TOMBOL TEGAS (Hardcoded agar tidak hilang) */
-        .btn-blue { background-color: #3b82f6 !important; border-color: #1d4ed8 !important; color: white !important; } 
-        .btn-green { background-color: #22c55e !important; border-color: #15803d !important; color: white !important; } 
-        .btn-red { background-color: #ef4444 !important; border-color: #b91c1c !important; color: white !important; } 
-        .btn-orange { background-color: #f97316 !important; border-color: #c2410c !important; color: white !important; } 
-        .btn-gray { background-color: #6b7280 !important; border-color: #374151 !important; color: white !important; } 
-        .btn-purple { background-color: #8b5cf6 !important; border-color: #6d28d9 !important; color: white !important; } 
-        .btn-yellow { background-color: #eab308 !important; border-color: #a16207 !important; color: white !important; }
+        /* Warna Hardcoded */
+        .btn-blue { background-color: #3b82f6 !important; border-color: #1d4ed8 !important; } 
+        .btn-green { background-color: #22c55e !important; border-color: #15803d !important; } 
+        .btn-red { background-color: #ef4444 !important; border-color: #b91c1c !important; } 
+        .btn-orange { background-color: #f97316 !important; border-color: #c2410c !important; } 
+        .btn-gray { background-color: #6b7280 !important; border-color: #374151 !important; } 
+        .btn-purple { background-color: #8b5cf6 !important; border-color: #6d28d9 !important; } 
+        .btn-yellow { background-color: #eab308 !important; border-color: #a16207 !important; }
 
-        /* ITEM CARD STYLES (Untuk Kebaikan/Keburukan) */
-        .item-card {
-            border-bottom: 4px solid;
-            transition: all 0.1s;
-            position: relative;
-            background-color: white;
-        }
-        .item-card:active {
-            transform: translateY(4px);
-            border-bottom-width: 0px !important;
-            margin-top: 4px;
-        }
-        /* Item Kebaikan (Hijau Muda) */
-        .item-good { 
-            background-color: #f0fdf4 !important; 
-            border-color: #22c55e !important; 
-            color: #15803d !important; 
-        }
-        .badge-good { background-color: #22c55e; color: white; }
+        /* Item Card Styles */
+        .item-good { background-color: #f0fdf4 !important; border-color: #22c55e !important; color: #15803d !important; border-bottom: 4px solid #22c55e; }
+        .item-bad { background-color: #fef2f2 !important; border-color: #ef4444 !important; color: #b91c1c !important; border-bottom: 4px solid #ef4444; }
+        .item-card:active { transform: translateY(4px); border-bottom-width: 0px !important; margin-top: 4px; }
 
-        /* Item Keburukan (Merah Muda) */
-        .item-bad { 
-            background-color: #fef2f2 !important; 
-            border-color: #ef4444 !important; 
-            color: #b91c1c !important; 
+        /* Background Pattern untuk Splash */
+        .bg-pattern {
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
         }
-        .badge-bad { background-color: #ef4444; color: white; }
 
         /* Scrollbar Hide */
         ::-webkit-scrollbar { width: 0px; background: transparent; }
         .fade-in { animation: fadeIn 0.5s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
-        /* Loader */
         #loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; align-items: center; justify-content: center; flex-direction: column; }
         .spinner { border: 8px solid #f3f3f3; border-top: 8px solid #3498db; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -146,100 +129,54 @@
             schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors;
         }
 
-        // Fungsi Simpan
         function saveData(skipCloud = false) {
             localStorage.setItem('schoolData', JSON.stringify(schoolData));
             localStorage.setItem('students', JSON.stringify(students));
             localStorage.setItem('logs', JSON.stringify(logs));
             localStorage.setItem('behaviors', JSON.stringify(behaviors));
-
-            if (!skipCloud && schoolData.apiUrl) {
-                syncToCloud();
-            }
+            if (!skipCloud && schoolData.apiUrl) syncToCloud();
         }
 
-        // --- CLOUD SYNC ENGINE ---
-        let debounceTimer;
-        let lastSyncError = "";
-
+        // --- CLOUD SYNC ---
+        let debounceTimer, lastSyncError = "";
         function updateSyncUI(status, message) {
-            const el = document.getElementById('syncStatus');
-            const dot = document.getElementById('syncDot');
-            const txt = document.getElementById('syncText');
-            if(!el) return;
-            
+            const el = document.getElementById('syncStatus'); if(!el) return;
+            const dot = document.getElementById('syncDot'); const txt = document.getElementById('syncText');
             el.classList.remove('hidden');
             if(status === 'loading') { dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerText = "Sync..."; }
-            else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Cloud Aktif"; }
+            else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Tersimpan"; setTimeout(() => { if(txt.innerText === "Tersimpan") txt.innerText = "Cloud Aktif"; }, 3000); }
             else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
         }
-
-        function showSyncError() {
-            if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data tetap tersimpan aman di HP.`, 'info');
-        }
-
+        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data aman di HP.`, 'info'); }
         function sendDataToScript(url, payload) {
-            const formData = new URLSearchParams();
-            formData.append('data', JSON.stringify(payload));
-            return fetch(url, { method: 'POST', body: formData })
-                .then(r => { if(!r.ok) throw new Error(r.status); return r.text(); })
-                .then(t => { try { return JSON.parse(t); } catch(e) { return {result:'success'}; } });
+            const formData = new URLSearchParams(); formData.append('data', JSON.stringify(payload));
+            return fetch(url, { method: 'POST', body: formData }).then(r => { if(!r.ok) throw new Error(r.status); return r.text(); }).then(t => { try { return JSON.parse(t); } catch(e) { return {result:'success'}; } });
         }
-
         function syncToCloud() {
-            if(!schoolData.apiUrl) return;
-            clearTimeout(debounceTimer);
-            updateSyncUI('loading');
-            
+            if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); updateSyncUI('loading');
             debounceTimer = setTimeout(() => {
                 const payload = { schoolData, students, logs, behaviors };
-                sendDataToScript(schoolData.apiUrl, payload)
-                    .then(() => updateSyncUI('success'))
-                    .catch(err => {
-                        const formData = new URLSearchParams();
-                        formData.append('data', JSON.stringify(payload));
-                        fetch(schoolData.apiUrl, { method: 'POST', mode: 'no-cors', body: formData })
-                            .then(() => updateSyncUI('success'))
-                            .catch(e => updateSyncUI('error', 'Gagal koneksi'));
-                    });
+                sendDataToScript(schoolData.apiUrl, payload).then(() => updateSyncUI('success')).catch(err => {
+                    const formData = new URLSearchParams(); formData.append('data', JSON.stringify(payload));
+                    fetch(schoolData.apiUrl, { method: 'POST', mode: 'no-cors', body: formData }).then(() => updateSyncUI('success')).catch(e => updateSyncUI('error', 'Gagal'));
+                });
             }, 2000);
         }
-
         function loadFromCloud() {
-            if(!schoolData.apiUrl) return;
-            updateSyncUI('loading');
-
-            fetch(schoolData.apiUrl)
-            .then(r => r.json())
-            .then(data => {
-                const cloudStudents = data.students || [];
-                const localStudents = students || [];
-
+            if(!schoolData.apiUrl) return; updateSyncUI('loading');
+            fetch(schoolData.apiUrl).then(r => r.json()).then(data => {
+                const cloudStudents = data.students || []; const localStudents = students || [];
                 if (cloudStudents.length >= localStudents.length && cloudStudents.length > 0) {
-                    students = cloudStudents;
-                    if(data.logs) logs = data.logs;
-                    if(data.behaviors) behaviors = data.behaviors;
-                    if(data.schoolData && data.schoolData.name) {
-                        const myApi = schoolData.apiUrl;
-                        schoolData = data.schoolData;
-                        schoolData.apiUrl = myApi;
-                    }
-                    saveData(true);
-                    updateSyncUI('success');
-                    if(document.getElementById('studentListContainer')) renderTeacherDashboard();
-                } else if (localStudents.length > 0) {
-                    syncToCloud();
-                } else {
-                    updateSyncUI('success');
-                }
-            })
-            .catch(e => updateSyncUI('error', 'Offline'));
+                    students = cloudStudents; if(data.logs) logs = data.logs; if(data.behaviors) behaviors = data.behaviors;
+                    if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; schoolData = data.schoolData; schoolData.apiUrl = myApi; }
+                    saveData(true); updateSyncUI('success'); if(document.getElementById('studentListContainer')) renderTeacherDashboard();
+                } else if (localStudents.length > 0) { syncToCloud(); } else { updateSyncUI('success'); }
+            }).catch(e => updateSyncUI('error', 'Offline'));
         }
-
         function forceTestWrite(url) {
             if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
             if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
-            Swal.fire({ title: 'Menulis Data Test...', didOpen: () => { Swal.showLoading(); const payload = { schoolData, students, logs, behaviors }; sendDataToScript(url, payload).then(data => { Swal.fire('Terkirim!', 'Cek Spreadsheet Anda.', 'success'); schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; }).catch(err => { Swal.fire('Gagal Kirim', 'Koneksi bermasalah.', 'error'); }); } });
+            Swal.fire({ title: 'Test Koneksi...', didOpen: () => { Swal.showLoading(); const payload = { schoolData, students, logs, behaviors }; sendDataToScript(url, payload).then(data => { Swal.fire('Sukses!', 'Koneksi Spreadsheet Berhasil.', 'success'); schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; }).catch(err => { Swal.fire('Gagal', 'Cek koneksi.', 'error'); }); } });
         }
 
         // --- VIEWS ---
@@ -249,16 +186,25 @@
             const logoSrc = schoolData.logo || "logo.png";
             
             const html = `
-                <div class="flex flex-col items-center justify-center min-h-screen bg-blue-50 text-center p-6 fade-in">
-                    <div class="mb-8 relative">
+                <div class="flex flex-col items-center justify-center min-h-screen bg-pattern text-center p-6 fade-in">
+                    <div class="mb-4 relative animate-bounce">
                         <div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden">
                             <img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2">
                         </div>
                     </div>
-                    <h1 class="text-2xl font-bold text-blue-800 mb-2 leading-tight">${schoolData.name}</h1>
-                    <p class="text-lg text-gray-600 font-medium mb-12">${schoolData.location}</p>
-                    <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg">MULAI APLIKASI</button>
-                    <p class="absolute bottom-4 text-xs text-gray-400">Versi 17.0 (Restored Input)</p>
+                    
+                    <h1 class="text-3xl font-black text-blue-600 mb-1 tracking-tight">Aplikasi Poin-QA</h1>
+                    <h2 class="text-xl font-bold text-gray-700 mb-1">${schoolData.name}</h2>
+                    <p class="text-md text-gray-500 font-medium mb-12">${schoolData.location}</p>
+
+                    <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">
+                        MULAI APLIKASI
+                    </button>
+                    
+                    <div class="absolute bottom-6 text-center w-full">
+                        <p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p>
+                        <p class="text-xs text-gray-400">Versi 18.0</p>
+                    </div>
                 </div>
             `;
             document.getElementById('appContent').innerHTML = html;
@@ -269,11 +215,11 @@
             const html = `
                 <div class="flex flex-col items-center justify-center min-h-screen p-6 fade-in">
                     <h2 class="text-2xl font-bold text-gray-700 mb-8">Pilih Mode Pengguna</h2>
-                    <button onclick="renderTeacherDashboard()" class="btn-3d btn-green w-full mb-6 p-6 rounded-2xl flex items-center justify-between group">
+                    <button onclick="renderTeacherDashboard()" class="btn-3d btn-green w-full mb-6 p-6 rounded-2xl flex items-center justify-between group cursor-pointer">
                         <div class="text-left"><span class="block text-2xl font-bold">Mode GURU</span><span class="text-green-100 text-sm">Kelola Siswa & Poin</span></div>
                         <i class="fas fa-chalkboard-user text-4xl opacity-80"></i>
                     </button>
-                    <button onclick="renderStudentLogin()" class="btn-3d btn-orange w-full p-6 rounded-2xl flex items-center justify-between group">
+                    <button onclick="renderStudentLogin()" class="btn-3d btn-orange w-full p-6 rounded-2xl flex items-center justify-between group cursor-pointer">
                         <div class="text-left"><span class="block text-2xl font-bold">Mode MURID</span><span class="text-amber-100 text-sm">Lihat Poin & Profil</span></div>
                         <i class="fas fa-user-graduate text-4xl opacity-80"></i>
                     </button>
@@ -330,11 +276,11 @@
 
             // BUTTONS GENERATOR
             const good = behaviors.filter(b => b.type === 'plus').map(b => 
-                `<button onclick="addPoint('${nis}', ${b.id})" class="item-card item-good p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-good px-2 rounded-full">+${b.points}</span></button>`
+                `<button onclick="addPoint('${nis}', ${b.id}')" class="item-card item-good p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-good px-2 rounded-full">+${b.points}</span></button>`
             ).join('');
 
             const bad = behaviors.filter(b => b.type === 'minus').map(b => 
-                `<button onclick="addPoint('${nis}', ${b.id})" class="item-card item-bad p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-bad px-2 rounded-full">${b.points}</span></button>`
+                `<button onclick="addPoint('${nis}', ${b.id}')" class="item-card item-bad p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-bad px-2 rounded-full">${b.points}</span></button>`
             ).join('');
 
             const html = `
@@ -342,8 +288,8 @@
                     <div class="bg-white rounded-2xl shadow-lg p-5 mb-6 text-center relative overflow-hidden">
                         <div class="absolute top-0 left-0 w-full h-20 bg-blue-500"></div>
                         <div class="absolute top-2 right-2 flex gap-2 z-20">
-                            <button onclick="renderEditStudent('${nis}')" class="bg-yellow-400 text-white p-2 rounded-lg text-xs font-bold shadow-md"><i class="fas fa-edit"></i></button>
-                            <button onclick="deleteStudent('${nis}')" class="bg-red-500 text-white p-2 rounded-lg text-xs font-bold shadow-md"><i class="fas fa-trash"></i></button>
+                            <button onclick="renderEditStudent('${nis}')" class="btn-3d btn-yellow p-2 rounded-lg text-xs font-bold"><i class="fas fa-edit"></i></button>
+                            <button onclick="deleteStudent('${nis}')" class="btn-3d btn-red p-2 rounded-lg text-xs font-bold"><i class="fas fa-trash"></i></button>
                         </div>
                         <div class="relative z-10 w-24 h-24 mx-auto bg-white rounded-full p-1 shadow-md -mb-12 mt-4"><img src="${student.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full rounded-full object-cover"></div>
                         <div class="mt-14">
@@ -354,7 +300,7 @@
                     </div>
 
                     <div class="flex mb-4 bg-gray-200 p-1 rounded-xl">
-                        <button onclick="showTab('good', this)" class="flex-1 py-2 text-sm font-bold rounded-lg btn-green shadow-sm transition">Kebaikan</button>
+                        <button onclick="showTab('good', this)" class="flex-1 py-2 text-sm font-bold rounded-lg btn-green text-white shadow-sm transition">Kebaikan</button>
                         <button onclick="showTab('bad', this)" class="flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition">Keburukan</button>
                         <button onclick="showTab('note', this)" class="flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition">Catatan</button>
                     </div>
@@ -380,16 +326,14 @@
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.getElementById('tab-'+id).classList.remove('hidden');
             
-            // Reset Button Styles
             const parent = btn.parentElement;
             Array.from(parent.children).forEach(child => {
                 child.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition";
             });
             
-            // Set Active Style
-            if(id === 'good') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-green shadow-sm transition";
-            if(id === 'bad') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-red shadow-sm transition";
-            if(id === 'note') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-blue shadow-sm transition";
+            if(id === 'good') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-green text-white shadow-sm transition";
+            if(id === 'bad') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-red text-white shadow-sm transition";
+            if(id === 'note') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-blue text-white shadow-sm transition";
         }
 
         function filterStudents() {
@@ -413,6 +357,49 @@
             });
             container.innerHTML = html;
         }
+
+        // --- MANAGE BEHAVIORS (UPDATED TO 3D BUTTONS) ---
+        function renderManageBehaviors() {
+            let listHTML = '';
+            behaviors.forEach((b, idx) => {
+                const colorClass = b.type === 'plus' ? 'btn-green' : 'btn-red';
+                listHTML += `
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="btn-3d ${colorClass} flex-grow p-3 rounded-lg text-left flex justify-between items-center mr-2">
+                            <span><i class="fas ${b.icon} mr-2"></i>${b.label}</span>
+                            <span class="bg-white text-gray-800 px-2 rounded text-xs font-bold">${b.points}</span>
+                        </div>
+                        <button onclick="delBehavior(${idx})" class="btn-3d btn-gray p-3 rounded-lg"><i class="fas fa-trash"></i></button>
+                    </div>
+                `;
+            });
+            const html = `
+                <div class="pt-20 px-6 pb-10">
+                    <h2 class="text-xl font-bold mb-4">Atur Item Poin</h2>
+                    <div class="space-y-1 mb-4">${listHTML}</div>
+                    <button onclick="addNewBehaviorPrompt()" class="btn-3d btn-blue w-full py-3 rounded-lg mb-4">Tambah Item Baru</button>
+                    <button onclick="renderTeacherDashboard()" class="w-full py-3 border rounded text-gray-500">Kembali</button>
+                </div>
+            `;
+            document.getElementById('appContent').innerHTML = html;
+        }
+
+        function addNewBehaviorPrompt() {
+            Swal.fire({
+                title: 'Tambah Item',
+                html: '<input id="l" class="swal2-input" placeholder="Nama Perilaku"><input id="p" type="number" class="swal2-input" placeholder="Poin (misal: 5 atau -5)">',
+                preConfirm: () => {
+                    const label = document.getElementById('l').value;
+                    const points = parseInt(document.getElementById('p').value);
+                    if(!label || !points) return;
+                    const type = points >= 0 ? 'plus' : 'minus';
+                    behaviors.push({id: Date.now(), label, points, type, icon: 'fa-star'});
+                    saveData();
+                    renderManageBehaviors();
+                }
+            });
+        }
+        function delBehavior(idx) { behaviors.splice(idx, 1); saveData(); renderManageBehaviors(); }
 
         // --- CRUD ACTIONS ---
         function addPoint(nis, bid) {
@@ -455,7 +442,7 @@
                         <div><label class="block text-sm font-bold text-gray-700">Tanggal Lahir</label><input type="date" name="dob" value="${student.dob}" class="w-full p-3 rounded-lg border border-gray-300"></div>
                         <div><label class="block text-sm font-bold text-gray-700">Alamat</label><textarea name="address" class="w-full p-3 rounded-lg border border-gray-300">${student.address}</textarea></div>
                         <div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div>
-                        <button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold">UPDATE</button>
+                        <button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold text-white">UPDATE</button>
                         <button type="button" onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button>
                     </form>
                 </div>`; 
@@ -477,13 +464,12 @@
                     <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
                         <h3 class="font-bold text-blue-800 mb-2">Sinkronisasi Spreadsheet</h3>
                         <input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2">
-                        <button onclick="saveApiUrl()" class="btn-3d btn-blue px-4 py-2 rounded text-sm font-bold w-full">Simpan & Test</button>
+                        <button onclick="saveApiUrl()" class="btn-3d btn-blue px-4 py-2 rounded-lg text-sm font-bold w-full">Simpan & Test</button>
                     </div>
                     <div class="space-y-3">
                         <div><label class="block text-sm font-bold">Nama Sekolah</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-2 border rounded"></div>
                         <div><label class="block text-sm font-bold">Lokasi</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-2 border rounded"></div>
-                        <div><label class="block text-sm font-bold">Logo (Nama File)</label><input type="text" id="sLogo" value="${schoolData.logo}" class="w-full p-2 border rounded" placeholder="logo.png"></div>
-                        <button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold">Simpan Profil</button>
+                        <button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold text-white">Simpan Profil</button>
                     </div>
                     <div class="mt-8 border-t pt-4"><button onclick="resetAll()" class="w-full py-3 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div>
                     <div class="text-center mt-4"><button onclick="renderTeacherDashboard()" class="text-gray-500 underline">Kembali</button></div>
@@ -501,12 +487,11 @@
         function saveSettings() {
             schoolData.name = document.getElementById('sName').value;
             schoolData.location = document.getElementById('sLoc').value;
-            schoolData.logo = document.getElementById('sLogo').value;
+            // No logo input anymore
             saveData(); Swal.fire('Tersimpan', '', 'success');
         }
 
         function renderAddStudent() {
-            // RESTORED: Full Form
             const html = `
                 <div class="pt-20 px-6 fade-in">
                     <h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2>
@@ -522,7 +507,7 @@
                         <div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div>
                         <input type="file" id="photoInput" class="w-full p-2 bg-white rounded border">
                         
-                        <button class="btn-3d btn-green w-full py-3 rounded font-bold mt-4">Simpan</button>
+                        <button class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button>
                     </form>
                     <button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button>
                 </div>
@@ -536,7 +521,6 @@
             
             // Handle Photo
             const photoInput = document.getElementById('photoInput');
-            let photoBase64 = "";
             
             const saveProcess = (photo) => {
                 students.push({ 
@@ -558,20 +542,6 @@
             }
         }
 
-        function renderManageBehaviors() {
-            const bList = behaviors.map((b, idx) => `<div class="flex justify-between bg-white p-3 border rounded"><span>${b.label} (${b.points})</span><button onclick="delBehavior(${idx})" class="text-red-500">Hapus</button></div>`).join('');
-            const html = `<div class="pt-20 px-6"><h2 class="text-xl font-bold mb-4">Atur Poin</h2><div class="space-y-2 mb-4">${bList}</div><button onclick="addNewBehaviorPrompt()" class="btn-3d btn-blue w-full py-2 rounded mt-2 mb-4">Tambah Baru</button><button onclick="renderTeacherDashboard()" class="w-full py-3 border rounded">Kembali</button></div>`;
-            document.getElementById('appContent').innerHTML = html;
-        }
-
-        function delBehavior(idx) { behaviors.splice(idx, 1); saveData(); renderManageBehaviors(); }
-        function addNewBehaviorPrompt() {
-            Swal.fire({ title: 'Tambah', html: '<input id="l" class="swal2-input" placeholder="Nama"><input id="p" type="number" class="swal2-input" placeholder="Poin">', preConfirm: () => {
-                behaviors.push({id: Date.now(), label: document.getElementById('l').value, points: parseInt(document.getElementById('p').value), type: parseInt(document.getElementById('p').value)>=0?'plus':'minus', icon: 'fa-star'});
-                saveData(); renderManageBehaviors();
-            }});
-        }
-
         function resetAll() { localStorage.clear(); location.reload(); }
         function exportToExcel() { if(logs.length===0) return Swal.fire('Info', 'Data kosong', 'info'); const d = logs.map(l => ({...l})); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d), "Data"); XLSX.writeFile(wb, "DataPoin.xlsx"); }
 
@@ -581,7 +551,7 @@
                 <div class="flex flex-col items-center justify-center min-h-screen px-6 fade-in">
                     <h2 class="text-2xl font-bold mb-4">Login Murid</h2>
                     <input id="loginNis" placeholder="Masukkan NIS" class="w-full p-4 border rounded text-center text-xl mb-4">
-                    <button onclick="handleLogin()" class="btn-3d btn-orange w-full py-3 rounded font-bold">Masuk</button>
+                    <button onclick="handleLogin()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white">Masuk</button>
                     <button onclick="goHome()" class="mt-4 text-gray-500">Kembali</button>
                 </div>
             `;
@@ -610,7 +580,7 @@
                     </div>
                     
                     <div class="flex mb-4 bg-gray-200 p-1 rounded-xl">
-                        <button onclick="showTab('sgood', this)" class="flex-1 py-2 text-xs font-bold rounded-lg btn-green shadow-sm transition">Kebaikan</button>
+                        <button onclick="showTab('sgood', this)" class="flex-1 py-2 text-xs font-bold rounded-lg btn-green text-white shadow-sm transition">Kebaikan</button>
                         <button onclick="showTab('sbad', this)" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 transition">Keburukan</button>
                         <button onclick="showTab('snote', this)" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 transition">Pesan</button>
                     </div>
@@ -623,6 +593,24 @@
                 </div>
             `;
             document.getElementById('appContent').innerHTML = html;
+        }
+
+        // FIXED: Robust Tab Switcher for Student
+        window.showTab = function(id, btn) {
+            // Hide all
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById('tab-'+id).classList.remove('hidden');
+            
+            // Reset Buttons
+            const parent = btn.parentElement;
+            Array.from(parent.children).forEach(child => {
+                child.className = "flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 transition";
+            });
+            
+            // Set Active
+            if(id === 'sgood') btn.className = "flex-1 py-2 text-xs font-bold rounded-lg btn-green text-white shadow-sm transition";
+            if(id === 'sbad') btn.className = "flex-1 py-2 text-xs font-bold rounded-lg btn-red text-white shadow-sm transition";
+            if(id === 'snote') btn.className = "flex-1 py-2 text-xs font-bold rounded-lg btn-blue text-white shadow-sm transition";
         }
 
         function goHome() { renderModeSelection(); }
