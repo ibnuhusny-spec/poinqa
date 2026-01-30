@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sistem Poin Siswa - SDIT Qurratu A'yun Al-Islami</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -27,13 +28,8 @@
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800">
-    <div id="loader"><div class="spinner mb-4"></div><p class="font-bold text-blue-500 animate-pulse" id="loaderText">Memuat...</p></div>
 
-    <!-- RAHASIA SINKRONISASI: IFRAME TERSEMBUNYI -->
-    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
-    <form id="syncForm" method="POST" target="hidden_iframe" style="display:none;">
-        <input type="hidden" name="data" id="syncDataInput">
-    </form>
+    <div id="loader"><div class="spinner mb-4"></div><p class="font-bold text-blue-500 animate-pulse" id="loaderText">Memuat...</p></div>
 
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative overflow-hidden">
         <div id="globalHeader" class="hidden absolute top-4 right-4 z-50 flex gap-2">
@@ -58,51 +54,71 @@
         try {
             schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
             if (!schoolData.name) { let savedApi = schoolData.apiUrl || ""; schoolData = { ...defaultSchoolData, apiUrl: savedApi }; }
-            students = JSON.parse(localStorage.getItem('students')) || []; logs = JSON.parse(localStorage.getItem('logs')) || []; behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
+            students = JSON.parse(localStorage.getItem('students')) || [];
+            logs = JSON.parse(localStorage.getItem('logs')) || [];
+            behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
         } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; }
 
         function saveData(skipCloud = false) {
-            localStorage.setItem('schoolData', JSON.stringify(schoolData)); localStorage.setItem('students', JSON.stringify(students));
-            localStorage.setItem('logs', JSON.stringify(logs)); localStorage.setItem('behaviors', JSON.stringify(behaviors));
+            localStorage.setItem('schoolData', JSON.stringify(schoolData));
+            localStorage.setItem('students', JSON.stringify(students));
+            localStorage.setItem('logs', JSON.stringify(logs));
+            localStorage.setItem('behaviors', JSON.stringify(behaviors));
             if (!skipCloud && schoolData.apiUrl) syncToCloud();
         }
 
-        let debounceTimer;
+        let debounceTimer, lastSyncError = "";
         function updateSyncUI(status, message) {
             const el = document.getElementById('syncStatus'); if(!el) return;
             const dot = document.getElementById('syncDot'); const txt = document.getElementById('syncText');
             el.classList.remove('hidden');
             if(status === 'loading') { dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerText = "Kirim..."; }
             else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Tersimpan"; setTimeout(() => { if(txt.innerText === "Tersimpan") txt.innerText = "Online"; }, 3000); }
-            else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; }
+            else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
         }
+        function showSyncError() { if(lastSyncError) Swal.fire('Info', `Status: ${lastSyncError}`, 'info'); }
 
-        // --- PENGIRIM DATA (IFRAME FORM) ---
+        // --- PENGIRIM DATA (FETCH NO-CORS TEXT/PLAIN) ---
+        // Metode ini paling toleran terhadap blokir browser
         function syncToCloud() {
-            if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); updateSyncUI('loading');
-            
-            // Hapus foto agar ringan
+            if(!schoolData.apiUrl) return; 
+            clearTimeout(debounceTimer); 
+            updateSyncUI('loading');
+
             const lightStudents = students.map(s => { const { photo, ...sisa } = s; return sisa; });
             const lightSchoolData = { ...schoolData, logo: "" }; 
-            const payload = { schoolData: lightSchoolData, students: lightStudents, logs, behaviors };
+            // Pastikan log poin adalah angka
+            const safeLogs = logs.map(l => ({...l, points: Number(l.points)}));
+            const safeBehaviors = behaviors.map(b => ({...b, points: Number(b.points)}));
+            
+            const payload = { 
+                schoolData: lightSchoolData, 
+                students: lightStudents, 
+                logs: safeLogs, 
+                behaviors: safeBehaviors 
+            };
 
             debounceTimer = setTimeout(() => {
-                const form = document.getElementById('syncForm'); const input = document.getElementById('syncDataInput');
-                if(form && input) {
-                    try {
-                        form.action = schoolData.apiUrl;
-                        input.value = JSON.stringify(payload);
-                        form.submit(); // Tembak langsung!
-                        // Kita asumsikan sukses setelah 1.5 detik
-                        setTimeout(() => updateSyncUI('success'), 1500); 
-                    } catch(e) { updateSyncUI('error'); }
-                }
+                fetch(schoolData.apiUrl, {
+                    method: 'POST',
+                    mode: 'no-cors', // Mode Buta (Kirim & Lupakan) agar tidak diblokir
+                    headers: { "Content-Type": "text/plain" }, // Header Text Plain
+                    body: JSON.stringify(payload)
+                })
+                .then(() => {
+                    // Karena mode no-cors, kita tidak dapat response body, tapi jika promise resolve berarti terkirim
+                    updateSyncUI('success');
+                })
+                .catch(err => {
+                    console.error(err);
+                    updateSyncUI('error', 'Gagal Kirim');
+                });
             }, 2000);
         }
 
         // --- PENARIK DATA (FETCH GET) ---
         function loadFromCloud(isManual = false) {
-            if(!schoolData.apiUrl) { if(isManual) Swal.fire('Error', 'Link kosong', 'error'); return; }
+            if(!schoolData.apiUrl) { if(isManual) Swal.fire('Error', 'Link belum diisi', 'error'); return; }
             if(isManual) Swal.fire({title:'Menarik Data...', didOpen:()=>Swal.showLoading()}); else updateSyncUI('loading');
 
             fetch(schoolData.apiUrl + '?action=read&t=' + Date.now())
@@ -117,16 +133,19 @@
                     if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
                     if(data.behaviors) behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
                     if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; const myLogo = schoolData.logo; schoolData = data.schoolData; schoolData.apiUrl = myApi; schoolData.logo = myLogo; }
-                    saveData(true); updateSyncUI('success');
+                    
+                    saveData(true); 
+                    updateSyncUI('success');
+                    
                     if(isManual) Swal.fire('Berhasil', 'Data ditarik dari Cloud.', 'success').then(() => { if(document.getElementById('studentListContainer')) renderTeacherDashboard(); });
                     else if(document.getElementById('studentListContainer')) renderTeacherDashboard();
                 } else {
-                    // Cloud kosong -> Kirim data lokal
-                    if(students.length > 0) syncToCloud();
+                    if(students.length > 0) syncToCloud(); // Jika cloud kosong, inisialisasi
                     updateSyncUI('success');
-                    if(isManual) Swal.fire('Info', 'Cloud masih kosong, data lokal dikirim.', 'info');
+                    if(isManual) Swal.fire('Info', 'Cloud masih kosong atau format data baru.', 'info');
                 }
-            }).catch(e => {
+            })
+            .catch(e => {
                 if(isManual) Swal.fire('Gagal', 'Tidak bisa baca data (Akses Ditolak/Offline).', 'error');
                 updateSyncUI('error');
             });
@@ -139,19 +158,17 @@
             
             Swal.fire({ 
                 title: 'Menyimpan...', 
-                html: 'Mengirim data ke Spreadsheet...', 
+                html: 'Mencoba mengirim data ke Spreadsheet...', 
                 didOpen: () => { 
                     Swal.showLoading(); 
                     schoolData.apiUrl = url; 
                     saveData(true); 
-                    
-                    // Gunakan syncToCloud() yang pakai Iframe Form
+                    // Panggil fungsi sync utama langsung
                     syncToCloud();
-
                     setTimeout(() => {
-                        Swal.fire('Terkirim', 'Data telah dikirim lewat formulir.<br>Silakan cek Spreadsheet Anda.', 'success');
+                        Swal.fire('Terkirim', 'Perintah kirim selesai.<br>Silakan cek Spreadsheet dalam 5-10 detik.', 'success');
                         document.querySelector('input[name="apiUrl"]').value = url;
-                    }, 2500);
+                    }, 2000);
                 } 
             });
         }
@@ -165,7 +182,15 @@
         function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; saveData(); Swal.fire('Tersimpan', '', 'success'); }
         function resetAll() { Swal.fire({ title: 'Reset Semua?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((result) => { if (result.isConfirmed) { localStorage.clear(); location.reload(); } }); }
         function exportToExcel() { if(logs.length===0) return Swal.fire('Info', 'Data kosong', 'info'); const d = logs.map(l => ({...l})); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d), "Data"); XLSX.writeFile(wb, "DataPoin.xlsx"); }
-        function renderSplash() { document.getElementById('globalHeader').classList.add('hidden'); const logoSrc = schoolData.logo || "logo.png"; const html = `<div class="flex flex-col items-center justify-center min-h-screen bg-pattern text-center p-6 fade-in"><div class="mb-4 relative animate-bounce"><div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-1 tracking-tight">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-12">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 38.0 (Iframe)</p></div></div>`; document.getElementById('appContent').innerHTML = html; }
+
+        // --- VIEWS ---
+        function renderSplash() {
+            document.getElementById('globalHeader').classList.add('hidden');
+            const logoSrc = schoolData.logo || "logo.png";
+            const html = `<div class="flex flex-col items-center justify-center min-h-screen bg-pattern text-center p-6 fade-in"><div class="mb-4 relative animate-bounce"><div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-1 tracking-tight">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-12">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 35.5 (Force Send)</p></div></div>`;
+            document.getElementById('appContent').innerHTML = html;
+        }
+
         function renderModeSelection() { document.getElementById('globalHeader').classList.remove('hidden'); const html = `<div class="flex flex-col items-center justify-center min-h-screen p-6 fade-in"><h2 class="text-2xl font-bold text-gray-700 mb-8">Pilih Mode Pengguna</h2><button onclick="checkTeacherPassword()" class="btn-3d btn-green w-full mb-6 p-6 rounded-2xl flex items-center justify-between group cursor-pointer"><div class="text-left"><span class="block text-2xl font-bold">Mode GURU</span><span class="text-green-100 text-sm">Kelola Siswa & Poin</span></div><i class="fas fa-chalkboard-user text-4xl opacity-80"></i></button><button onclick="renderStudentLogin()" class="btn-3d btn-orange w-full p-6 rounded-2xl flex items-center justify-between group cursor-pointer"><div class="text-left"><span class="block text-2xl font-bold">Mode MURID</span><span class="text-amber-100 text-sm">Lihat Poin & Profil</span></div><i class="fas fa-user-graduate text-4xl opacity-80"></i></button></div>`; document.getElementById('appContent').innerHTML = html; }
         function checkTeacherPassword() { Swal.fire({ title: 'Password Guru', input: 'password', inputAttributes: { autocapitalize: 'off' }, showCancelButton: true, confirmButtonText: 'Masuk', confirmButtonColor: '#22c55e', preConfirm: (pass) => { if (pass === 'QA-Poin77') return true; else Swal.showValidationMessage('Password Salah!'); } }).then((result) => { if (result.isConfirmed) renderTeacherDashboard(); }); }
 
@@ -177,14 +202,15 @@
                 const color = totalPoints >= 0 ? 'text-green-600' : 'text-red-500';
                 listHTML += `<div onclick="renderStudentDetail('${s.nis}')" class="bg-white p-4 rounded-xl shadow-md border-l-4 ${totalPoints>=0?'border-green-400':'border-red-400'} mb-3 flex items-center justify-between cursor-pointer active:bg-gray-50 transition"><div class="flex items-center gap-3"><div class="w-12 h-12 rounded-full bg-gray-200 overflow-hidden border border-gray-300"><img src="${s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full object-cover"></div><div><h3 class="font-bold text-gray-800">${s.name}</h3><p class="text-xs text-gray-500">${s.kelas} | NIS: ${s.nis}</p></div></div><div class="font-bold text-xl ${color}">${totalPoints>0?'+':''}${totalPoints}</div></div>`;
             });
-            const html = `<div class="pt-20 px-4 pb-24 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-4">Dashboard Guru</h2><div class="grid grid-cols-2 gap-3 mb-3"><button onclick="renderAddStudent()" class="btn-3d btn-blue py-3 rounded-lg text-sm font-bold"><i class="fas fa-user-plus mr-1"></i> Tambah Siswa</button><button onclick="renderManageBehaviors()" class="btn-3d btn-purple py-3 rounded-lg text-sm font-bold"><i class="fas fa-list-check mr-1"></i> Atur Poin</button></div><div class="grid grid-cols-2 gap-3 mb-6"><button onclick="exportToExcel()" class="btn-3d btn-green py-3 rounded-lg text-sm font-bold"><i class="fas fa-file-excel mr-1"></i> Download Excel</button><button onclick="renderSetup()" class="btn-3d btn-gray py-3 rounded-lg text-sm font-bold"><i class="fas fa-cog mr-1"></i> Setup & Cloud</button></div><div class="relative mb-4"><input type="text" id="searchStudent" onkeyup="filterStudents()" placeholder="Cari nama siswa..." class="w-full p-3 pl-10 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm"><i class="fas fa-search absolute left-3 top-3.5 text-gray-400"></i></div><div id="studentListContainer">${listHTML}</div></div>`;
+            const html = `<div class="pt-20 px-4 pb-24 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-4">Dashboard Guru</h2><div class="grid grid-cols-2 gap-3 mb-3"><button onclick="renderAddStudent()" class="btn-3d btn-blue py-3 rounded-lg text-sm font-bold"><i class="fas fa-user-plus mr-1"></i> Tambah Siswa</button><button onclick="renderManageBehaviors()" class="btn-3d btn-purple py-3 rounded-lg text-sm font-bold"><i class="fas fa-list-check mr-1"></i> Atur Poin</button></div><div class="grid grid-cols-2 gap-3 mb-6"><button onclick="exportToExcel()" class="btn-3d btn-green py-3 rounded-lg text-sm font-bold"><i class="fas fa-file-excel mr-1"></i> Download Excel</button><button onclick="renderSetup()" class="btn-3d btn-gray py-3 rounded-lg text-sm font-bold"><i class="fas fa-cog mr-1"></i> Setup & Cloud</button></div><div class="relative mb-4"><input type="text" id="searchStudent" onkeyup="filterStudents()" placeholder="Cari nama siswa..." class="w-full p-3 pl-10 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm"><i class="fas fa-search absolute left-3 top-3.5 text-gray-400"></i></div><div id="studentListContainer">${listHTML}</div>
+            <div class="fixed bottom-4 left-0 w-full px-4"><button onclick="syncToCloud()" class="w-full bg-blue-600 text-white py-2 rounded-lg text-xs font-bold shadow-lg opacity-90"><i class="fas fa-cloud-upload-alt mr-1"></i> Kirim Data ke Cloud (Manual)</button></div>
+            </div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
         function renderStudentDetail(nis) {
             const student = students.find(s => String(s.nis) === String(nis)); if(!student) return;
             const points = logs.filter(l => String(l.studentId) === String(nis)).reduce((sum, c) => sum + Number(c.points), 0);
-            
             const sortedBehaviors = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1));
             const good = sortedBehaviors.filter(b => b.type === 'plus').map(b => `<button onclick="addPoint('${nis}', ${b.id}')" class="item-card item-good p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-good px-2 rounded-full">+${b.points}</span></button>`).join('');
             const bad = sortedBehaviors.filter(b => b.type === 'minus').map(b => `<button onclick="addPoint('${nis}', ${b.id}')" class="item-card item-bad p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-bad px-2 rounded-full">${b.points}</span></button>`).join('');
@@ -239,7 +265,7 @@
         async function handleUpdateStudent(e, oldNis) { e.preventDefault(); const form = e.target; const index = students.findIndex(s => String(s.nis) === String(oldNis)); if (index === -1) return; const processUpdate = (photo) => { students[index] = { ...students[index], name: form.name.value, kelas: form.kelas.value, dob: form.dob.value, address: form.address.value, photo: photo }; saveData(); Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetail(oldNis)); }; const fileInput = document.getElementById('photoInputEdit'); if (fileInput.files[0]) { compressImage(fileInput.files[0]).then(res => processUpdate(res)).catch(() => processUpdate("")); } else { processUpdate(students[index].photo); } }
         
         function renderSetup() { const html = `<div class="pt-20 px-6 fade-in pb-10"><h2 class="text-2xl font-bold text-gray-800 mb-4">Pengaturan</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4"><h3 class="font-bold text-blue-800 mb-2">Sinkronisasi Spreadsheet</h3><input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2"><div class="flex gap-2"><button onclick="checkConnectionAndSave(document.querySelector('#apiUrlInput').value)" class="flex-1 btn-3d btn-blue px-2 py-2 rounded-lg text-sm font-bold">Simpan & Test</button><button onclick="forcePull()" class="flex-1 btn-3d btn-purple px-2 py-2 rounded-lg text-sm font-bold">Paksa Ambil Data</button></div></div><div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4"><h3 class="font-bold text-gray-700 mb-2">Backup Manual</h3><div class="flex gap-2"><button onclick="downloadBackup()" class="flex-1 btn-3d btn-green py-2 rounded-lg text-xs font-bold">Download Data</button><button onclick="triggerRestore()" class="flex-1 btn-3d btn-orange py-2 rounded-lg text-xs font-bold">Upload Data</button><input type="file" id="restoreInput" style="display:none" onchange="handleRestore(event)"></div></div><div class="space-y-3"><div><label class="block text-sm font-bold">Nama Sekolah</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-2 border rounded"></div><div><label class="block text-sm font-bold">Lokasi</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-2 border rounded"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold text-white">Simpan Profil</button></div><div class="mt-8 border-t pt-4"><button onclick="resetAll()" class="w-full py-3 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div><div class="text-center mt-4"><button onclick="renderTeacherDashboard()" class="text-gray-500 underline">Kembali</button></div></div>`; document.getElementById('appContent').innerHTML = html; }
-        function checkConnectionAndSave(url) { if(!url) return Swal.fire('Error', 'URL belum diisi', 'error'); if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; Swal.fire({ title: 'Menghubungi Server...', didOpen: () => { Swal.showLoading(); schoolData.apiUrl = url; saveData(); const payload = { schoolData: {name: "Test"}, students: [], logs: [], behaviors: [] }; fetch(url, { method: 'POST', headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) }).then(() => { Swal.fire('Sukses', 'Tersambung!', 'success'); saveData(true); }).catch(err => { Swal.fire('Peringatan', 'Koneksi lambat/diblokir, tapi link disimpan.', 'warning'); }); } }); }
+        function saveApiUrl() { let url = document.getElementById('apiUrlInput').value; if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; schoolData.apiUrl = url; saveData(true); forceTestWrite(url); }
         function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; saveData(); Swal.fire('Tersimpan', '', 'success'); }
         function renderAddStudent() { const html = `<div class="pt-20 px-6 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><form onsubmit="handleAddSubmit(event)" class="space-y-3"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div><input type="date" name="dob" class="w-full p-3 border rounded"><textarea name="address" placeholder="Alamat Lengkap" class="w-full p-3 border rounded" rows="2"></textarea><div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div><input type="file" id="photoInput" class="w-full p-2 bg-white rounded border"><button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button></form><button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button></div>`; document.getElementById('appContent').innerHTML = html; }
         
