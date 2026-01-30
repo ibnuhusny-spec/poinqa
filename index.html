@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sistem Poin Siswa - SDIT Qurratu A'yun Al-Islami</title>
-    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -13,40 +12,28 @@
 
     <style>
         body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
-        
-        .btn-3d {
-            transition: all 0.1s; position: relative; transform: translateY(0);
-            border-bottom-width: 4px; border-style: solid; color: white; 
-            display: flex; align-items: center; justify-content: center;
-            text-shadow: 0 1px 1px rgba(0,0,0,0.2); cursor: pointer; user-select: none;
-        }
+        .btn-3d { transition: all 0.1s; position: relative; transform: translateY(0); border-bottom-width: 4px; border-style: solid; color: white; display: flex; align-items: center; justify-content: center; text-shadow: 0 1px 1px rgba(0,0,0,0.2); cursor: pointer; user-select: none; }
         .btn-3d:active { transform: translateY(4px); border-bottom-width: 0px !important; margin-top: 4px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
         .btn-3d:disabled { opacity: 0.7; transform: translateY(2px); border-bottom-width: 2px; cursor: not-allowed; }
-
-        .btn-blue { background-color: #3b82f6 !important; border-color: #1d4ed8 !important; } 
-        .btn-green { background-color: #22c55e !important; border-color: #15803d !important; } 
-        .btn-red { background-color: #ef4444 !important; border-color: #b91c1c !important; } 
-        .btn-orange { background-color: #f97316 !important; border-color: #c2410c !important; } 
-        .btn-gray { background-color: #6b7280 !important; border-color: #374151 !important; } 
-        .btn-purple { background-color: #8b5cf6 !important; border-color: #6d28d9 !important; } 
-        .btn-yellow { background-color: #eab308 !important; border-color: #a16207 !important; }
-
+        .btn-blue { background-color: #3b82f6 !important; border-color: #1d4ed8 !important; } .btn-green { background-color: #22c55e !important; border-color: #15803d !important; } .btn-red { background-color: #ef4444 !important; border-color: #b91c1c !important; } .btn-orange { background-color: #f97316 !important; border-color: #c2410c !important; } .btn-gray { background-color: #6b7280 !important; border-color: #374151 !important; } .btn-purple { background-color: #8b5cf6 !important; border-color: #6d28d9 !important; } .btn-yellow { background-color: #eab308 !important; border-color: #a16207 !important; }
         .item-good { background-color: #f0fdf4 !important; border-color: #22c55e !important; color: #15803d !important; border-bottom: 4px solid #22c55e; }
         .item-bad { background-color: #fef2f2 !important; border-color: #ef4444 !important; color: #b91c1c !important; border-bottom: 4px solid #ef4444; }
         .item-card:active { transform: translateY(4px); border-bottom-width: 0px !important; margin-top: 4px; }
-
         .bg-pattern { background-color: #f8fafc; background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px); background-size: 24px 24px; }
-        ::-webkit-scrollbar { width: 0px; background: transparent; } 
-        .fade-in { animation: fadeIn 0.5s ease-in-out; }
-        
+        ::-webkit-scrollbar { width: 0px; background: transparent; } .fade-in { animation: fadeIn 0.5s ease-in-out; }
         #loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; align-items: center; justify-content: center; flex-direction: column; }
         .spinner { border: 8px solid #f3f3f3; border-top: 8px solid #3498db; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800">
-
     <div id="loader"><div class="spinner mb-4"></div><p class="font-bold text-blue-500 animate-pulse" id="loaderText">Memuat...</p></div>
+
+    <!-- RAHASIA SINKRONISASI: IFRAME TERSEMBUNYI -->
+    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+    <form id="syncForm" method="POST" target="hidden_iframe" style="display:none;">
+        <input type="hidden" name="data" id="syncDataInput">
+    </form>
 
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative overflow-hidden">
         <div id="globalHeader" class="hidden absolute top-4 right-4 z-50 flex gap-2">
@@ -61,193 +48,124 @@
     <script>
         const defaultSchoolData = { name: "SDIT Qurratu A'yun Al-Islami", location: "Kabupaten Maros", logo: "logo.png", apiUrl: "" };
         const initialBehaviors = [
-            { id: 1, type: 'plus', label: 'Sholat Dhuha', points: 5, icon: 'fa-person-praying' },
-            { id: 2, type: 'plus', label: 'Membantu Teman', points: 3, icon: 'fa-hand-holding-heart' },
-            { id: 3, type: 'plus', label: 'Hafalan Qur\'an', points: 10, icon: 'fa-book-quran' },
-            { id: 4, type: 'plus', label: 'Datang Tepat Waktu', points: 2, icon: 'fa-clock' },
-            { id: 5, type: 'minus', label: 'Terlambat', points: -5, icon: 'fa-person-running' },
-            { id: 6, type: 'minus', label: 'Tidak Mengerjakan PR', points: -10, icon: 'fa-book-open' },
-            { id: 7, type: 'minus', label: 'Berkelahi/Gaduh', points: -15, icon: 'fa-user-injured' },
-            { id: 8, type: 'minus', label: 'Buang Sampah Sembarangan', points: -5, icon: 'fa-trash' }
+            { id: 1, type: 'plus', label: 'Sholat Dhuha', points: 5, icon: 'fa-person-praying' }, { id: 2, type: 'plus', label: 'Membantu Teman', points: 3, icon: 'fa-hand-holding-heart' },
+            { id: 3, type: 'plus', label: 'Hafalan Qur\'an', points: 10, icon: 'fa-book-quran' }, { id: 4, type: 'plus', label: 'Datang Tepat Waktu', points: 2, icon: 'fa-clock' },
+            { id: 5, type: 'minus', label: 'Terlambat', points: -5, icon: 'fa-person-running' }, { id: 6, type: 'minus', label: 'Tidak Mengerjakan PR', points: -10, icon: 'fa-book-open' },
+            { id: 7, type: 'minus', label: 'Berkelahi/Gaduh', points: -15, icon: 'fa-user-injured' }, { id: 8, type: 'minus', label: 'Buang Sampah Sembarangan', points: -5, icon: 'fa-trash' }
         ];
 
         let schoolData, students, logs, behaviors;
         try {
             schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
             if (!schoolData.name) { let savedApi = schoolData.apiUrl || ""; schoolData = { ...defaultSchoolData, apiUrl: savedApi }; }
-            students = JSON.parse(localStorage.getItem('students')) || [];
-            logs = JSON.parse(localStorage.getItem('logs')) || [];
-            behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
+            students = JSON.parse(localStorage.getItem('students')) || []; logs = JSON.parse(localStorage.getItem('logs')) || []; behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
         } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; }
 
         function saveData(skipCloud = false) {
-            localStorage.setItem('schoolData', JSON.stringify(schoolData));
-            localStorage.setItem('students', JSON.stringify(students));
-            localStorage.setItem('logs', JSON.stringify(logs));
-            localStorage.setItem('behaviors', JSON.stringify(behaviors));
+            localStorage.setItem('schoolData', JSON.stringify(schoolData)); localStorage.setItem('students', JSON.stringify(students));
+            localStorage.setItem('logs', JSON.stringify(logs)); localStorage.setItem('behaviors', JSON.stringify(behaviors));
             if (!skipCloud && schoolData.apiUrl) syncToCloud();
         }
 
-        let debounceTimer, lastSyncError = "";
+        let debounceTimer;
         function updateSyncUI(status, message) {
             const el = document.getElementById('syncStatus'); if(!el) return;
             const dot = document.getElementById('syncDot'); const txt = document.getElementById('syncText');
             el.classList.remove('hidden');
-            if(status === 'loading') { dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerText = "Sync..."; }
-            else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Online"; }
-            else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
+            if(status === 'loading') { dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerText = "Kirim..."; }
+            else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Tersimpan"; setTimeout(() => { if(txt.innerText === "Tersimpan") txt.innerText = "Online"; }, 3000); }
+            else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; }
         }
-        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data aman di HP.`, 'info'); }
-        
-        // --- DATA TRANSPORT ---
-        
-        // Gunakan text/plain untuk POST agar tidak kena preflight CORS
-        function sendDataToScript(url, payload) {
-            return fetch(url, {
-                method: 'POST',
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(payload)
-            }).then(r => r.text()).then(t => {
-                try { return JSON.parse(t); } catch(e) { return {result:'success'}; }
-            });
-        }
-        
+
+        // --- PENGIRIM DATA (IFRAME FORM) ---
         function syncToCloud() {
-            if(!schoolData.apiUrl) return; 
-            clearTimeout(debounceTimer); 
-            updateSyncUI('loading');
+            if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); updateSyncUI('loading');
             
-            // Hapus foto dari payload agar ringan & tidak error
+            // Hapus foto agar ringan
             const lightStudents = students.map(s => { const { photo, ...sisa } = s; return sisa; });
             const lightSchoolData = { ...schoolData, logo: "" }; 
             const payload = { schoolData: lightSchoolData, students: lightStudents, logs, behaviors };
 
             debounceTimer = setTimeout(() => {
-                sendDataToScript(schoolData.apiUrl, payload)
-                .then(res => {
-                    if(res.result === 'success') updateSyncUI('success');
-                    else updateSyncUI('error', res.error);
-                })
-                .catch(err => {
-                    console.log("Normal sync failed, trying blind send");
-                    // Blind Send (No-CORS) sebagai cadangan
-                    fetch(schoolData.apiUrl, { method: 'POST', mode: 'no-cors', headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) })
-                    .then(() => updateSyncUI('success'))
-                    .catch(e => updateSyncUI('error', 'Gagal'));
-                });
+                const form = document.getElementById('syncForm'); const input = document.getElementById('syncDataInput');
+                if(form && input) {
+                    try {
+                        form.action = schoolData.apiUrl;
+                        input.value = JSON.stringify(payload);
+                        form.submit(); // Tembak langsung!
+                        // Kita asumsikan sukses setelah 1.5 detik
+                        setTimeout(() => updateSyncUI('success'), 1500); 
+                    } catch(e) { updateSyncUI('error'); }
+                }
             }, 2000);
         }
-        
-        function loadFromCloud() {
-            if(!schoolData.apiUrl) return; 
-            updateSyncUI('loading');
-            
-            // Tambahkan timestamp agar tidak cache
+
+        // --- PENARIK DATA (FETCH GET) ---
+        function loadFromCloud(isManual = false) {
+            if(!schoolData.apiUrl) { if(isManual) Swal.fire('Error', 'Link kosong', 'error'); return; }
+            if(isManual) Swal.fire({title:'Menarik Data...', didOpen:()=>Swal.showLoading()}); else updateSyncUI('loading');
+
             fetch(schoolData.apiUrl + '?action=read&t=' + Date.now())
             .then(r => r.json())
             .then(data => {
-                const cloudStudents = data.students || [];
-                
-                // LOGIKA MASTER:
-                // Jika Cloud ada isinya, Cloud MENIMPA Lokal (kecuali foto).
-                // Jika Cloud kosong tapi Lokal ada, Lokal MENGISI Cloud.
-                
-                if (cloudStudents.length > 0) {
-                    students = cloudStudents.map(cloudS => {
+                if(isManual) Swal.close();
+                if(data.students && Array.isArray(data.students) && data.students.length > 0) {
+                    students = data.students.map(cloudS => {
                         const localS = students.find(l => String(l.nis) === String(cloudS.nis));
-                        return { ...cloudS, photo: localS ? localS.photo : "" }; // Restore foto lokal
+                        return { ...cloudS, photo: localS ? localS.photo : "" };
                     });
-                    
                     if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
                     if(data.behaviors) behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
-                    
-                    if(data.schoolData && data.schoolData.name) { 
-                        const myApi = schoolData.apiUrl; 
-                        const myLogo = schoolData.logo; 
-                        schoolData = data.schoolData; 
-                        schoolData.apiUrl = myApi; 
-                        schoolData.logo = myLogo; 
-                    }
-                    
-                    saveData(true); 
-                    updateSyncUI('success'); 
-                    if(document.getElementById('studentListContainer')) renderTeacherDashboard();
-                } else if (students.length > 0) {
-                    // Inisialisasi Cloud dari HP Pertama
-                    syncToCloud(); 
+                    if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; const myLogo = schoolData.logo; schoolData = data.schoolData; schoolData.apiUrl = myApi; schoolData.logo = myLogo; }
+                    saveData(true); updateSyncUI('success');
+                    if(isManual) Swal.fire('Berhasil', 'Data ditarik dari Cloud.', 'success').then(() => { if(document.getElementById('studentListContainer')) renderTeacherDashboard(); });
+                    else if(document.getElementById('studentListContainer')) renderTeacherDashboard();
                 } else {
+                    // Cloud kosong -> Kirim data lokal
+                    if(students.length > 0) syncToCloud();
                     updateSyncUI('success');
+                    if(isManual) Swal.fire('Info', 'Cloud masih kosong, data lokal dikirim.', 'info');
                 }
-            })
-            .catch(e => {
-                console.error(e);
-                updateSyncUI('error', 'Gagal Tarik Data');
+            }).catch(e => {
+                if(isManual) Swal.fire('Gagal', 'Tidak bisa baca data (Akses Ditolak/Offline).', 'error');
+                updateSyncUI('error');
             });
         }
-        
-        function forcePull() { loadFromCloud(); }
-        
-        function forceTestWrite(url) {
-            if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
-            if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
+        function forcePull() { loadFromCloud(true); }
+
+        function checkConnectionAndSave(url) {
+            if(!url) return Swal.fire('Error', 'URL kosong', 'error');
+            if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
             
             Swal.fire({ 
-                title: 'Tes Koneksi...', 
-                html: 'Mencoba membaca data dari server...', 
+                title: 'Menyimpan...', 
+                html: 'Mengirim data ke Spreadsheet...', 
                 didOpen: () => { 
                     Swal.showLoading(); 
+                    schoolData.apiUrl = url; 
+                    saveData(true); 
                     
-                    // Coba BACA dulu (GET)
-                    fetch(url + '?action=read&t=' + Date.now())
-                    .then(r => r.json())
-                    .then(data => {
-                        Swal.fire('Sukses', 'Koneksi Berhasil! Data ditemukan.', 'success');
-                        schoolData.apiUrl = url; saveData(true); 
+                    // Gunakan syncToCloud() yang pakai Iframe Form
+                    syncToCloud();
+
+                    setTimeout(() => {
+                        Swal.fire('Terkirim', 'Data telah dikirim lewat formulir.<br>Silakan cek Spreadsheet Anda.', 'success');
                         document.querySelector('input[name="apiUrl"]').value = url;
-                        // Trigger load
-                        loadFromCloud();
-                    })
-                    .catch(err => {
-                        // Jika baca gagal, coba TULIS (POST)
-                         const payload = { schoolData: {name: schoolData.name}, students: [], logs: [], behaviors: [] };
-                         sendDataToScript(url, payload).then(() => {
-                            Swal.fire('Sukses (Tulis)', 'Akses Tulis berhasil (Akses Baca mungkin dibatasi).', 'success');
-                            schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url;
-                         }).catch(e => {
-                            Swal.fire('Gagal Total', 'Tidak bisa Baca maupun Tulis. Cek Script & Izin.', 'error');
-                         });
-                    });
+                    }, 2500);
                 } 
             });
         }
 
-        function compressImage(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader(); reader.readAsDataURL(file);
-                reader.onload = (event) => {
-                    const img = new Image(); img.src = event.target.result;
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const maxWidth = 300; const scaleSize = maxWidth / img.width;
-                        canvas.width = maxWidth; canvas.height = img.height * scaleSize;
-                        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        resolve(canvas.toDataURL('image/jpeg', 0.6));
-                    };
-                    img.onerror = reject;
-                };
-                reader.onerror = reject;
-            });
-        }
-        function toBase64(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => resolve(r.result); r.onerror = reject; }); }
-
-        // --- VIEWS ---
-        function renderSplash() {
-            document.getElementById('globalHeader').classList.add('hidden');
-            const logoSrc = schoolData.logo || "logo.png";
-            const html = `<div class="flex flex-col items-center justify-center min-h-screen bg-pattern text-center p-6 fade-in"><div class="mb-4 relative animate-bounce"><div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-1 tracking-tight">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-12">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 37.0 (Master Cloud)</p></div></div>`;
-            document.getElementById('appContent').innerHTML = html;
-        }
-
+        // --- COMPRESSOR ---
+        function compressImage(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); const maxWidth = 300; const scaleSize = maxWidth / img.width; canvas.width = maxWidth; canvas.height = img.height * scaleSize; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', 0.6)); }; img.onerror = (err) => reject(err); }; reader.onerror = (err) => reject(err); }); }
+        function toBase64(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => resolve(r.result); r.onerror = error => reject(error); }); }
+        function downloadBackup() { const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors})); const downloadAnchorNode = document.createElement('a'); downloadAnchorNode.setAttribute("href", dataStr); downloadAnchorNode.setAttribute("download", "Backup_Poin_" + new Date().toISOString().slice(0,10) + ".json"); document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove(); }
+        function triggerRestore() { document.getElementById('restoreInput').click(); }
+        function handleRestore(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function(e) { try { const data = JSON.parse(e.target.result); if(data.students && data.logs) { students = data.students; logs = data.logs; behaviors = data.behaviors || behaviors; if(data.schoolData) schoolData = data.schoolData; saveData(true); Swal.fire('Berhasil', 'Data dipulihkan.', 'success').then(() => location.reload()); } else { Swal.fire('Gagal', 'Format salah.', 'error'); } } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); } }; reader.readAsText(file); }
+        function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; saveData(); Swal.fire('Tersimpan', '', 'success'); }
+        function resetAll() { Swal.fire({ title: 'Reset Semua?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((result) => { if (result.isConfirmed) { localStorage.clear(); location.reload(); } }); }
+        function exportToExcel() { if(logs.length===0) return Swal.fire('Info', 'Data kosong', 'info'); const d = logs.map(l => ({...l})); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d), "Data"); XLSX.writeFile(wb, "DataPoin.xlsx"); }
+        function renderSplash() { document.getElementById('globalHeader').classList.add('hidden'); const logoSrc = schoolData.logo || "logo.png"; const html = `<div class="flex flex-col items-center justify-center min-h-screen bg-pattern text-center p-6 fade-in"><div class="mb-4 relative animate-bounce"><div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-1 tracking-tight">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-12">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 38.0 (Iframe)</p></div></div>`; document.getElementById('appContent').innerHTML = html; }
         function renderModeSelection() { document.getElementById('globalHeader').classList.remove('hidden'); const html = `<div class="flex flex-col items-center justify-center min-h-screen p-6 fade-in"><h2 class="text-2xl font-bold text-gray-700 mb-8">Pilih Mode Pengguna</h2><button onclick="checkTeacherPassword()" class="btn-3d btn-green w-full mb-6 p-6 rounded-2xl flex items-center justify-between group cursor-pointer"><div class="text-left"><span class="block text-2xl font-bold">Mode GURU</span><span class="text-green-100 text-sm">Kelola Siswa & Poin</span></div><i class="fas fa-chalkboard-user text-4xl opacity-80"></i></button><button onclick="renderStudentLogin()" class="btn-3d btn-orange w-full p-6 rounded-2xl flex items-center justify-between group cursor-pointer"><div class="text-left"><span class="block text-2xl font-bold">Mode MURID</span><span class="text-amber-100 text-sm">Lihat Poin & Profil</span></div><i class="fas fa-user-graduate text-4xl opacity-80"></i></button></div>`; document.getElementById('appContent').innerHTML = html; }
         function checkTeacherPassword() { Swal.fire({ title: 'Password Guru', input: 'password', inputAttributes: { autocapitalize: 'off' }, showCancelButton: true, confirmButtonText: 'Masuk', confirmButtonColor: '#22c55e', preConfirm: (pass) => { if (pass === 'QA-Poin77') return true; else Swal.showValidationMessage('Password Salah!'); } }).then((result) => { if (result.isConfirmed) renderTeacherDashboard(); }); }
 
@@ -320,8 +238,8 @@
         function renderEditStudent(nis) { const student = students.find(s => String(s.nis) === String(nis)); if (!student) return; const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${student.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700">NIS</label><input type="text" value="${student.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div><div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${student.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700">Tanggal Lahir</label><input type="date" name="dob" value="${student.dob}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700">Alamat</label><textarea name="address" class="w-full p-3 rounded-lg border border-gray-300">${student.address}</textarea></div><div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div><button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold text-white">UPDATE</button><button type="button" onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button></form></div>`; document.getElementById('appContent').innerHTML = html; }
         async function handleUpdateStudent(e, oldNis) { e.preventDefault(); const form = e.target; const index = students.findIndex(s => String(s.nis) === String(oldNis)); if (index === -1) return; const processUpdate = (photo) => { students[index] = { ...students[index], name: form.name.value, kelas: form.kelas.value, dob: form.dob.value, address: form.address.value, photo: photo }; saveData(); Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetail(oldNis)); }; const fileInput = document.getElementById('photoInputEdit'); if (fileInput.files[0]) { compressImage(fileInput.files[0]).then(res => processUpdate(res)).catch(() => processUpdate("")); } else { processUpdate(students[index].photo); } }
         
-        function renderSetup() { const html = `<div class="pt-20 px-6 fade-in pb-10"><h2 class="text-2xl font-bold text-gray-800 mb-4">Pengaturan</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4"><h3 class="font-bold text-blue-800 mb-2">Sinkronisasi Spreadsheet</h3><input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2"><div class="flex gap-2"><button onclick="saveApiUrl()" class="flex-1 btn-3d btn-blue px-2 py-2 rounded-lg text-sm font-bold">Simpan & Test</button><button onclick="forcePull()" class="flex-1 btn-3d btn-purple px-2 py-2 rounded-lg text-sm font-bold">Paksa Ambil Data</button></div></div><div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4"><h3 class="font-bold text-gray-700 mb-2">Backup Manual</h3><div class="flex gap-2"><button onclick="downloadBackup()" class="flex-1 btn-3d btn-green py-2 rounded-lg text-xs font-bold">Download Data</button><button onclick="triggerRestore()" class="flex-1 btn-3d btn-orange py-2 rounded-lg text-xs font-bold">Upload Data</button><input type="file" id="restoreInput" style="display:none" onchange="handleRestore(event)"></div></div><div class="space-y-3"><div><label class="block text-sm font-bold">Nama Sekolah</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-2 border rounded"></div><div><label class="block text-sm font-bold">Lokasi</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-2 border rounded"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold text-white">Simpan Profil</button></div><div class="mt-8 border-t pt-4"><button onclick="resetAll()" class="w-full py-3 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div><div class="text-center mt-4"><button onclick="renderTeacherDashboard()" class="text-gray-500 underline">Kembali</button></div></div>`; document.getElementById('appContent').innerHTML = html; }
-        function saveApiUrl() { let url = document.getElementById('apiUrlInput').value; if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; schoolData.apiUrl = url; saveData(true); forceTestWrite(url); }
+        function renderSetup() { const html = `<div class="pt-20 px-6 fade-in pb-10"><h2 class="text-2xl font-bold text-gray-800 mb-4">Pengaturan</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4"><h3 class="font-bold text-blue-800 mb-2">Sinkronisasi Spreadsheet</h3><input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2"><div class="flex gap-2"><button onclick="checkConnectionAndSave(document.querySelector('#apiUrlInput').value)" class="flex-1 btn-3d btn-blue px-2 py-2 rounded-lg text-sm font-bold">Simpan & Test</button><button onclick="forcePull()" class="flex-1 btn-3d btn-purple px-2 py-2 rounded-lg text-sm font-bold">Paksa Ambil Data</button></div></div><div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4"><h3 class="font-bold text-gray-700 mb-2">Backup Manual</h3><div class="flex gap-2"><button onclick="downloadBackup()" class="flex-1 btn-3d btn-green py-2 rounded-lg text-xs font-bold">Download Data</button><button onclick="triggerRestore()" class="flex-1 btn-3d btn-orange py-2 rounded-lg text-xs font-bold">Upload Data</button><input type="file" id="restoreInput" style="display:none" onchange="handleRestore(event)"></div></div><div class="space-y-3"><div><label class="block text-sm font-bold">Nama Sekolah</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-2 border rounded"></div><div><label class="block text-sm font-bold">Lokasi</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-2 border rounded"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold text-white">Simpan Profil</button></div><div class="mt-8 border-t pt-4"><button onclick="resetAll()" class="w-full py-3 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div><div class="text-center mt-4"><button onclick="renderTeacherDashboard()" class="text-gray-500 underline">Kembali</button></div></div>`; document.getElementById('appContent').innerHTML = html; }
+        function checkConnectionAndSave(url) { if(!url) return Swal.fire('Error', 'URL belum diisi', 'error'); if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; Swal.fire({ title: 'Menghubungi Server...', didOpen: () => { Swal.showLoading(); schoolData.apiUrl = url; saveData(); const payload = { schoolData: {name: "Test"}, students: [], logs: [], behaviors: [] }; fetch(url, { method: 'POST', headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) }).then(() => { Swal.fire('Sukses', 'Tersambung!', 'success'); saveData(true); }).catch(err => { Swal.fire('Peringatan', 'Koneksi lambat/diblokir, tapi link disimpan.', 'warning'); }); } }); }
         function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; saveData(); Swal.fire('Tersimpan', '', 'success'); }
         function renderAddStudent() { const html = `<div class="pt-20 px-6 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><form onsubmit="handleAddSubmit(event)" class="space-y-3"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div><input type="date" name="dob" class="w-full p-3 border rounded"><textarea name="address" placeholder="Alamat Lengkap" class="w-full p-3 border rounded" rows="2"></textarea><div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div><input type="file" id="photoInput" class="w-full p-2 bg-white rounded border"><button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button></form><button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button></div>`; document.getElementById('appContent').innerHTML = html; }
         
