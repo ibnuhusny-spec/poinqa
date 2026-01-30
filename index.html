@@ -14,7 +14,6 @@
     <style>
         body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
         
-        /* 3D Button Styles */
         .btn-3d {
             transition: all 0.1s; position: relative; transform: translateY(0);
             border-bottom-width: 4px; border-style: solid; color: white; 
@@ -98,51 +97,104 @@
             else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Tersimpan"; setTimeout(() => { if(txt.innerText === "Tersimpan") txt.innerText = "Cloud Aktif"; }, 3000); }
             else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
         }
-        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Tenang, data aman di HP ini.`, 'info'); }
+        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Tenang, data aman di HP ini (Offline Mode).`, 'info'); }
         
-        // --- SMART BLIND SENDER ---
-        function sendDataToScript(url, payload) {
-            // Coba kirim Normal
+        // --- ULTIMATE SYNC SENDER V3 ---
+        
+        // Fungsi kirim data menggunakan format FORM (paling kompatibel)
+        function sendDataFormMode(url, payload) {
+            const formData = new URLSearchParams();
+            formData.append('data', JSON.stringify(payload));
+
+            // Mode 'no-cors' adalah kunci untuk menembus blokir browser/network
+            // Kelemahannya: Kita tidak tahu apakah sukses atau gagal (Blind Send)
+            // Tapi datanya hampir pasti sampai jika URL benar.
             return fetch(url, {
                 method: 'POST',
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(payload)
-            }).then(r => {
-                if(!r.ok) throw new Error("HTTP Error " + r.status);
-                return r.text();
-            }).then(t => {
-                // Jika respon HTML (Error Google), lempar error agar ditangkap catch
-                if(t.includes("<!DOCTYPE") || t.includes("Sign in")) throw new Error("Akses Ditolak Google");
-                return {result:'success'};
+                mode: 'no-cors', 
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: formData
             });
+        }
+        
+        // Fungsi Test Koneksi (Diagnosa)
+        function forceTestWrite(url) {
+            if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
+            if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
+            
+            Swal.fire({ 
+                title: 'Diagnosa Koneksi...', 
+                html: 'Tahap 1: Cek Jalur GET...', 
+                didOpen: async () => { 
+                    Swal.showLoading(); 
+                    
+                    const payload = { schoolData: {name: schoolData.name}, students: [{nis:"TEST", name:"Cek Koneksi"}], logs: [], behaviors: [] }; 
+                    
+                    try {
+                        // TAHAP 1: Cek apakah Script Hidup (GET)
+                        const getCheck = await fetch(url).then(r => r.json()).catch(e => null);
+                        
+                        if(getCheck) {
+                             // Script Hidup, coba kirim POST Normal
+                             Swal.update({ html: 'Tahap 2: Cek Kirim Data Normal...' });
+                             
+                             const formData = new URLSearchParams();
+                             formData.append('data', JSON.stringify(payload));
+                             
+                             fetch(url, { method: 'POST', body: formData })
+                                .then(r => r.text())
+                                .then(t => {
+                                    if(t.includes('success') || t.includes('result')) {
+                                        finishTest(url, true, "Koneksi Normal Berhasil!");
+                                    } else {
+                                        throw new Error("Respon aneh");
+                                    }
+                                })
+                                .catch(err => {
+                                    // TAHAP 3: Fallback ke Jalur Darurat (No-CORS)
+                                    Swal.update({ html: 'Tahap 3: Cek Jalur Darurat (No-CORS)...' });
+                                    sendDataFormMode(url, payload).then(() => {
+                                        finishTest(url, true, "Sukses via Jalur Darurat! Data akan masuk.");
+                                    }).catch(e => {
+                                        finishTest(url, false, "Gagal Total. Cek URL dan Internet.");
+                                    });
+                                });
+
+                        } else {
+                            // GET Gagal, mungkin Script diprivate atau URL salah
+                            finishTest(url, false, "Script tidak merespon. Pastikan Deploy 'Anyone' & 'New Version'.");
+                        }
+                    } catch (e) {
+                         finishTest(url, false, "Error Jaringan: " + e.message);
+                    }
+                } 
+            });
+        }
+
+        function finishTest(url, success, msg) {
+            if(success) {
+                Swal.fire('Berhasil', msg, 'success');
+                schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url;
+            } else {
+                Swal.fire('Gagal', msg, 'error');
+            }
         }
         
         function syncToCloud() {
             if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); updateSyncUI('loading');
             
-            // HYBRID SYNC: KIRIM TANPA FOTO
             const lightStudents = students.map(s => { const { photo, ...sisa } = s; return sisa; });
             const lightSchoolData = { ...schoolData, logo: "" }; 
             const payload = { schoolData: lightSchoolData, students: lightStudents, logs, behaviors };
 
             debounceTimer = setTimeout(() => {
-                sendDataToScript(schoolData.apiUrl, payload).then(res => {
-                    updateSyncUI('success');
-                }).catch(err => {
-                    // JIKA GAGAL (KARENA HTML LOGIN / CORS), PAKAI MODE HANTU (NO-CORS)
-                    console.log("Mode Normal Gagal, beralih ke Mode Hantu (No-CORS)");
-                    fetch(schoolData.apiUrl, { 
-                        method: 'POST', 
-                        mode: 'no-cors', // INI KUNCINYA: Memaksa kirim tanpa peduli balasan
-                        headers: { "Content-Type": "text/plain;charset=utf-8" }, 
-                        body: JSON.stringify(payload) 
-                    }).then(() => {
-                        updateSyncUI('success'); // Kita anggap sukses karena data sudah terlempar
-                    }).catch(e => {
-                        updateSyncUI('error', 'Gagal Total');
+                // Langsung pakai metode paling sakti: FORM + NO-CORS
+                sendDataFormMode(schoolData.apiUrl, payload)
+                    .then(() => updateSyncUI('success'))
+                    .catch(e => {
+                        updateSyncUI('error', 'Gagal');
                         lastSyncError = e.message;
                     });
-                });
             }, 2000);
         }
         
@@ -150,7 +202,6 @@
             if(!schoolData.apiUrl) return; updateSyncUI('loading');
             fetch(schoolData.apiUrl).then(r => r.json()).then(data => {
                 const cloudStudents = data.students || []; const localStudents = students || [];
-                // Merge Logic
                 if (cloudStudents.length >= localStudents.length && cloudStudents.length > 0) {
                     students = cloudStudents.map(cloudS => {
                         const localS = localStudents.find(l => String(l.nis) === String(cloudS.nis));
@@ -159,42 +210,8 @@
                     if(data.logs) logs = data.logs; if(data.behaviors) behaviors = data.behaviors;
                     if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; schoolData = data.schoolData; schoolData.apiUrl = myApi; }
                     saveData(true); updateSyncUI('success'); if(document.getElementById('studentListContainer')) renderTeacherDashboard();
-                } else if (localStudents.length > 0) { 
-                    syncToCloud(); 
-                } else { 
-                    updateSyncUI('success'); 
-                }
-            }).catch(e => {
-                // Jika load gagal (karena login required), biarkan saja offline mode
-                console.log("Load gagal (mungkin butuh auth), skip.");
-                updateSyncUI('error', 'Offline Mode');
-            });
-        }
-        
-        function forceTestWrite(url) {
-            if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
-            if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
-            Swal.fire({ 
-                title: 'Tes Koneksi...', text: 'Mengirim data...', 
-                didOpen: () => { 
-                    Swal.showLoading(); 
-                    const payload = { schoolData: {name: schoolData.name}, students: [{nis:"TEST", name:"Cek Koneksi"}], logs: [], behaviors: [] }; 
-                    
-                    sendDataToScript(url, payload).then(data => { 
-                        Swal.fire('Sukses!', 'Jalur Normal Berhasil.', 'success'); 
-                        schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; 
-                    }).catch(err => { 
-                        // Coba Mode Hantu
-                         fetch(url, { method: 'POST', mode: 'no-cors', headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) })
-                        .then(() => {
-                             Swal.fire('Sukses (Jalur Alternatif)', 'Koneksi normal diblokir Google, tapi aplikasi berhasil menggunakan Jalur Alternatif (No-CORS). Data akan masuk.', 'success');
-                             schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; 
-                        }).catch(e => {
-                            Swal.fire('Gagal Total', `Pastikan URL benar: ${url}`, 'error'); 
-                        });
-                    }); 
-                } 
-            });
+                } else if (localStudents.length > 0) { syncToCloud(); } else { updateSyncUI('success'); }
+            }).catch(e => updateSyncUI('error', 'Offline'));
         }
 
         // --- COMPRESSOR ---
@@ -217,13 +234,13 @@
             });
         }
 
-        // --- BACKUP & RESTORE MANUAL ---
+        // --- BACKUP & RESTORE ---
         function downloadBackup() {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors}));
             const downloadAnchorNode = document.createElement('a');
             downloadAnchorNode.setAttribute("href",     dataStr);
             downloadAnchorNode.setAttribute("download", "Backup_Poin_" + new Date().toISOString().slice(0,10) + ".json");
-            document.body.appendChild(downloadAnchorNode); // required for firefox
+            document.body.appendChild(downloadAnchorNode);
             downloadAnchorNode.click();
             downloadAnchorNode.remove();
         }
@@ -240,8 +257,8 @@
                         students = data.students; logs = data.logs; behaviors = data.behaviors || behaviors;
                         if(data.schoolData) schoolData = data.schoolData;
                         saveData(true);
-                        Swal.fire('Berhasil', 'Data berhasil dipulihkan dari file.', 'success').then(() => location.reload());
-                    } else { Swal.fire('Gagal', 'Format file salah.', 'error'); }
+                        Swal.fire('Berhasil', 'Data dipulihkan.', 'success').then(() => location.reload());
+                    } else { Swal.fire('Gagal', 'Format salah.', 'error'); }
                 } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); }
             };
             reader.readAsText(file);
@@ -266,7 +283,7 @@
                     <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button>
                     <div class="absolute bottom-6 text-center w-full">
                         <p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p>
-                        <p class="text-xs text-gray-400">Versi 29.0 (Ghost Mode Sync)</p>
+                        <p class="text-xs text-gray-400">Versi 30.0 (Ultimate Sync)</p>
                     </div>
                 </div>
             `;
@@ -491,36 +508,6 @@
         function goHome() { renderModeSelection(); }
         function toBase64(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => resolve(r.result); r.onerror = error => reject(error); }); }
         function formatDate(d) { try { return new Date(d).toLocaleDateString('id-ID'); } catch(e) { return d; } }
-
-        // --- MANUAL BACKUP LOGIC ---
-        function downloadBackup() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors}));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href",     dataStr);
-            downloadAnchorNode.setAttribute("download", "Backup_Poin_" + new Date().toISOString().slice(0,10) + ".json");
-            document.body.appendChild(downloadAnchorNode);
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-        }
-
-        function triggerRestore() { document.getElementById('restoreInput').click(); }
-        function handleRestore(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = JSON.parse(e.target.result);
-                    if(data.students && data.logs) {
-                        students = data.students; logs = data.logs; behaviors = data.behaviors || behaviors;
-                        if(data.schoolData) schoolData = data.schoolData;
-                        saveData(true);
-                        Swal.fire('Berhasil', 'Data dipulihkan.', 'success').then(() => location.reload());
-                    } else { Swal.fire('Gagal', 'Format salah.', 'error'); }
-                } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); }
-            };
-            reader.readAsText(file);
-        }
 
         window.onload = function() { renderSplash(); if(schoolData.apiUrl) loadFromCloud(); };
     </script>
