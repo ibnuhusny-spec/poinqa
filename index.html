@@ -14,12 +14,11 @@
     <style>
         body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
         
-        /* 3D Button Styles */
         .btn-3d {
             transition: all 0.1s; position: relative; transform: translateY(0);
             border-bottom-width: 4px; border-style: solid; color: white; 
             display: flex; align-items: center; justify-content: center;
-            text-shadow: 0 1px 1px rgba(0,0,0,0.2); cursor: pointer;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.2); cursor: pointer; user-select: none;
         }
         .btn-3d:active { transform: translateY(4px); border-bottom-width: 0px !important; margin-top: 4px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
         .btn-3d:disabled { opacity: 0.7; transform: translateY(2px); border-bottom-width: 2px; cursor: not-allowed; }
@@ -37,7 +36,7 @@
         .item-card:active { transform: translateY(4px); border-bottom-width: 0px !important; margin-top: 4px; }
 
         .bg-pattern { background-color: #f8fafc; background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px); background-size: 24px 24px; }
-        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        ::-webkit-scrollbar { width: 0px; background: transparent; } 
         .fade-in { animation: fadeIn 0.5s ease-in-out; }
         
         #loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; align-items: center; justify-content: center; flex-direction: column; }
@@ -89,164 +88,163 @@
             if (!skipCloud && schoolData.apiUrl) syncToCloud();
         }
 
-        // --- SINKRONISASI SEDERHANA & KUAT ---
+        let debounceTimer, lastSyncError = "";
         function updateSyncUI(status, message) {
             const el = document.getElementById('syncStatus'); if(!el) return;
             const dot = document.getElementById('syncDot'); const txt = document.getElementById('syncText');
             el.classList.remove('hidden');
             if(status === 'loading') { dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerText = "Sync..."; }
             else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Online"; }
-            else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; }
+            else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
         }
-
-        // Kirim Data (POST) - Gunakan text/plain untuk bypass CORS preflight
-        function syncToCloud() {
-            if(!schoolData.apiUrl) return;
-            updateSyncUI('loading');
-
-            const lightStudents = students.map(s => { const { photo, ...sisa } = s; return sisa; }); // Hemat kuota
-            const payload = { schoolData: {...schoolData, logo:""}, students: lightStudents, logs, behaviors };
-
-            fetch(schoolData.apiUrl, {
+        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data aman di HP.`, 'info'); }
+        
+        // --- DATA TRANSPORT ---
+        
+        // Gunakan text/plain untuk POST agar tidak kena preflight CORS
+        function sendDataToScript(url, payload) {
+            return fetch(url, {
                 method: 'POST',
-                headers: { "Content-Type": "text/plain;charset=utf-8" }, // Kunci agar tidak diblokir
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify(payload)
-            })
-            .then(res => res.text())
-            .then(txt => {
-                if(txt.includes("Success") || txt.includes("result")) updateSyncUI('success');
-                else updateSyncUI('error');
-            })
-            .catch(err => {
-                console.error("Sync gagal:", err);
-                updateSyncUI('error');
+            }).then(r => r.text()).then(t => {
+                try { return JSON.parse(t); } catch(e) { return {result:'success'}; }
             });
         }
-
-        // Tarik Data (GET) - Server adalah Raja
-        function loadFromCloud(isManual = false) {
-            if(!schoolData.apiUrl) {
-                if(isManual) Swal.fire('Error', 'Link belum diisi di Pengaturan', 'error');
-                return;
-            }
+        
+        function syncToCloud() {
+            if(!schoolData.apiUrl) return; 
+            clearTimeout(debounceTimer); 
+            updateSyncUI('loading');
             
-            if(isManual) Swal.fire({title: 'Menarik Data...', didOpen: () => Swal.showLoading()});
-            else updateSyncUI('loading');
+            // Hapus foto dari payload agar ringan & tidak error
+            const lightStudents = students.map(s => { const { photo, ...sisa } = s; return sisa; });
+            const lightSchoolData = { ...schoolData, logo: "" }; 
+            const payload = { schoolData: lightSchoolData, students: lightStudents, logs, behaviors };
 
-            // Tambah t=... agar tidak dicache browser
-            fetch(schoolData.apiUrl + '?t=' + Date.now())
+            debounceTimer = setTimeout(() => {
+                sendDataToScript(schoolData.apiUrl, payload)
+                .then(res => {
+                    if(res.result === 'success') updateSyncUI('success');
+                    else updateSyncUI('error', res.error);
+                })
+                .catch(err => {
+                    console.log("Normal sync failed, trying blind send");
+                    // Blind Send (No-CORS) sebagai cadangan
+                    fetch(schoolData.apiUrl, { method: 'POST', mode: 'no-cors', headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) })
+                    .then(() => updateSyncUI('success'))
+                    .catch(e => updateSyncUI('error', 'Gagal'));
+                });
+            }, 2000);
+        }
+        
+        function loadFromCloud() {
+            if(!schoolData.apiUrl) return; 
+            updateSyncUI('loading');
+            
+            // Tambahkan timestamp agar tidak cache
+            fetch(schoolData.apiUrl + '?action=read&t=' + Date.now())
             .then(r => r.json())
             .then(data => {
-                if(isManual) Swal.close();
+                const cloudStudents = data.students || [];
                 
-                // Pastikan data valid sebelum menimpa
-                if(data.students) {
-                    // Simpan foto lokal dulu
-                    const localPhotos = {};
-                    students.forEach(s => { if(s.photo) localPhotos[s.nis] = s.photo; });
-
-                    students = data.students.map(s => ({
-                        ...s,
-                        photo: localPhotos[s.nis] || "" // Kembalikan foto jika ada di HP
-                    }));
+                // LOGIKA MASTER:
+                // Jika Cloud ada isinya, Cloud MENIMPA Lokal (kecuali foto).
+                // Jika Cloud kosong tapi Lokal ada, Lokal MENGISI Cloud.
+                
+                if (cloudStudents.length > 0) {
+                    students = cloudStudents.map(cloudS => {
+                        const localS = students.find(l => String(l.nis) === String(cloudS.nis));
+                        return { ...cloudS, photo: localS ? localS.photo : "" }; // Restore foto lokal
+                    });
                     
-                    if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)})); // Paksa jadi angka
+                    if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
                     if(data.behaviors) behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
                     
-                    // Update setting kecuali API URL
-                    if(data.schoolData && data.schoolData.name) {
-                        const myApi = schoolData.apiUrl;
-                        const myLogo = schoolData.logo;
-                        schoolData = data.schoolData;
-                        schoolData.apiUrl = myApi;
-                        schoolData.logo = myLogo;
+                    if(data.schoolData && data.schoolData.name) { 
+                        const myApi = schoolData.apiUrl; 
+                        const myLogo = schoolData.logo; 
+                        schoolData = data.schoolData; 
+                        schoolData.apiUrl = myApi; 
+                        schoolData.logo = myLogo; 
                     }
-
-                    saveData(true); // Simpan lokal tanpa kirim balik
-                    updateSyncUI('success');
-                    if(isManual) Swal.fire('Berhasil', 'Data berhasil ditarik dari Cloud.', 'success').then(() => location.reload());
-                    else if(document.getElementById('studentListContainer')) renderTeacherDashboard();
+                    
+                    saveData(true); 
+                    updateSyncUI('success'); 
+                    if(document.getElementById('studentListContainer')) renderTeacherDashboard();
+                } else if (students.length > 0) {
+                    // Inisialisasi Cloud dari HP Pertama
+                    syncToCloud(); 
                 } else {
-                    if(isManual) Swal.fire('Info', 'Data di Cloud kosong atau format salah.', 'info');
+                    updateSyncUI('success');
                 }
             })
-            .catch(err => {
-                if(isManual) Swal.fire('Gagal', 'Tidak bisa menghubungi server.<br>Pastikan Deployment Script sudah "Anyone".', 'error');
-                updateSyncUI('error');
+            .catch(e => {
+                console.error(e);
+                updateSyncUI('error', 'Gagal Tarik Data');
             });
         }
-
-        function forcePull() { loadFromCloud(true); }
-
-        function checkConnectionAndSave(url) {
-            if(!url) return Swal.fire('Error', 'URL Kosong', 'error');
-            if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
+        
+        function forcePull() { loadFromCloud(); }
+        
+        function forceTestWrite(url) {
+            if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
+            if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
             
-            Swal.fire({
-                title: 'Menghubungi Server...',
-                text: 'Sedang mencoba mengirim data...',
-                didOpen: () => {
-                    Swal.showLoading();
-                    const payload = { 
-                        schoolData: {name: schoolData.name}, 
-                        students: [{nis:"TEST", name:"Cek Koneksi", kelas:"-", dob:"", address:"-"}], 
-                        logs: [], behaviors: behaviors 
-                    };
+            Swal.fire({ 
+                title: 'Tes Koneksi...', 
+                html: 'Mencoba membaca data dari server...', 
+                didOpen: () => { 
+                    Swal.showLoading(); 
                     
-                    fetch(url, {
-                        method: 'POST',
-                        headers: { "Content-Type": "text/plain;charset=utf-8" },
-                        body: JSON.stringify(payload)
-                    })
-                    .then(res => res.text())
-                    .then(txt => {
-                        if(txt.includes("Success") || txt.includes("result")) {
-                            schoolData.apiUrl = url;
-                            saveData(true); // Simpan URL
-                            Swal.fire('Sukses', 'Terhubung! Data telah disimpan.<br>Silakan coba tarik data di HP.', 'success');
-                            document.getElementById('apiUrlInput').value = url;
-                        } else {
-                            throw new Error("Respon Server: " + txt.substring(0, 50));
-                        }
+                    // Coba BACA dulu (GET)
+                    fetch(url + '?action=read&t=' + Date.now())
+                    .then(r => r.json())
+                    .then(data => {
+                        Swal.fire('Sukses', 'Koneksi Berhasil! Data ditemukan.', 'success');
+                        schoolData.apiUrl = url; saveData(true); 
+                        document.querySelector('input[name="apiUrl"]').value = url;
+                        // Trigger load
+                        loadFromCloud();
                     })
                     .catch(err => {
-                        let hint = "Cek internet.";
-                        if(err.message.includes("Failed to fetch")) hint = "Izin Ditolak. Pastikan Script dideploy sebagai <b>Anyone</b> (Siapa Saja).";
-                        Swal.fire('Koneksi Gagal', `${err.message}<br><br>${hint}`, 'error');
+                        // Jika baca gagal, coba TULIS (POST)
+                         const payload = { schoolData: {name: schoolData.name}, students: [], logs: [], behaviors: [] };
+                         sendDataToScript(url, payload).then(() => {
+                            Swal.fire('Sukses (Tulis)', 'Akses Tulis berhasil (Akses Baca mungkin dibatasi).', 'success');
+                            schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url;
+                         }).catch(e => {
+                            Swal.fire('Gagal Total', 'Tidak bisa Baca maupun Tulis. Cek Script & Izin.', 'error');
+                         });
                     });
-                }
+                } 
             });
         }
 
-        // --- COMPRESSOR & TOOLS ---
-        function compressImage(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); const maxWidth = 300; const scaleSize = maxWidth / img.width; canvas.width = maxWidth; canvas.height = img.height * scaleSize; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', 0.6)); }; img.onerror = (err) => reject(err); }; reader.onerror = (err) => reject(err); }); }
-        function toBase64(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => resolve(r.result); r.onerror = error => reject(error); }); }
-        function formatDate(d) { try { return new Date(d).toLocaleDateString('id-ID'); } catch(e) { return d; } }
-        
-        // RESET TOTAL
-        function resetAll() {
-            Swal.fire({
-                title: 'Reset Total?',
-                text: "Semua data di HP ini akan dihapus bersih.",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                confirmButtonText: 'Ya, Hapus!'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    localStorage.clear();
-                    location.reload();
-                }
+        function compressImage(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader(); reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image(); img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const maxWidth = 300; const scaleSize = maxWidth / img.width;
+                        canvas.width = maxWidth; canvas.height = img.height * scaleSize;
+                        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.6));
+                    };
+                    img.onerror = reject;
+                };
+                reader.onerror = reject;
             });
         }
-
-        function exportToExcel() { if(logs.length===0) return Swal.fire('Info', 'Data kosong', 'info'); const d = logs.map(l => ({...l})); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d), "Data"); XLSX.writeFile(wb, "DataPoin.xlsx"); }
+        function toBase64(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => resolve(r.result); r.onerror = reject; }); }
 
         // --- VIEWS ---
         function renderSplash() {
             document.getElementById('globalHeader').classList.add('hidden');
             const logoSrc = schoolData.logo || "logo.png";
-            const html = `<div class="flex flex-col items-center justify-center min-h-screen bg-pattern text-center p-6 fade-in"><div class="mb-4 relative animate-bounce"><div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-1 tracking-tight">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-12">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 35.0 (Stable)</p></div></div>`;
+            const html = `<div class="flex flex-col items-center justify-center min-h-screen bg-pattern text-center p-6 fade-in"><div class="mb-4 relative animate-bounce"><div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-1 tracking-tight">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-12">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 37.0 (Master Cloud)</p></div></div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
@@ -322,118 +320,24 @@
         function renderEditStudent(nis) { const student = students.find(s => String(s.nis) === String(nis)); if (!student) return; const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${student.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700">NIS</label><input type="text" value="${student.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div><div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${student.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700">Tanggal Lahir</label><input type="date" name="dob" value="${student.dob}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700">Alamat</label><textarea name="address" class="w-full p-3 rounded-lg border border-gray-300">${student.address}</textarea></div><div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div><button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold text-white">UPDATE</button><button type="button" onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button></form></div>`; document.getElementById('appContent').innerHTML = html; }
         async function handleUpdateStudent(e, oldNis) { e.preventDefault(); const form = e.target; const index = students.findIndex(s => String(s.nis) === String(oldNis)); if (index === -1) return; const processUpdate = (photo) => { students[index] = { ...students[index], name: form.name.value, kelas: form.kelas.value, dob: form.dob.value, address: form.address.value, photo: photo }; saveData(); Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetail(oldNis)); }; const fileInput = document.getElementById('photoInputEdit'); if (fileInput.files[0]) { compressImage(fileInput.files[0]).then(res => processUpdate(res)).catch(() => processUpdate("")); } else { processUpdate(students[index].photo); } }
         
-        function renderSetup() { const html = `<div class="pt-20 px-6 fade-in pb-10"><h2 class="text-2xl font-bold text-gray-800 mb-4">Pengaturan</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4"><h3 class="font-bold text-blue-800 mb-2">Sinkronisasi Spreadsheet</h3><input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2"><div class="flex gap-2"><button onclick="checkConnectionAndSave(document.querySelector('#apiUrlInput').value)" class="flex-1 btn-3d btn-blue px-2 py-2 rounded-lg text-sm font-bold">Simpan & Test</button></div></div><div class="space-y-3"><div><label class="block text-sm font-bold">Nama Sekolah</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-2 border rounded"></div><div><label class="block text-sm font-bold">Lokasi</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-2 border rounded"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold text-white">Simpan Profil</button></div><div class="mt-8 border-t pt-4"><button onclick="resetAll()" class="w-full py-3 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div><div class="text-center mt-4"><button onclick="renderTeacherDashboard()" class="text-gray-500 underline">Kembali</button></div></div>`; document.getElementById('appContent').innerHTML = html; }
-        
-        // FIXED: CHECK CONNECTION AND SAVE
-        function checkConnectionAndSave(url) {
-            if(!url) return Swal.fire('Error', 'URL belum diisi', 'error');
-            if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
-            
-            Swal.fire({
-                title: 'Menghubungi Server...',
-                didOpen: () => {
-                    Swal.showLoading();
-                    schoolData.apiUrl = url;
-                    
-                    // Cek Koneksi (Kirim Data Dummy via Fetch)
-                    const payload = { schoolData: {name: "Test"}, students: [], logs: [], behaviors: [] };
-                    
-                    fetch(url, {
-                        method: 'POST',
-                        headers: { "Content-Type": "text/plain;charset=utf-8" },
-                        body: JSON.stringify(payload)
-                    })
-                    .then(r => r.text())
-                    .then(t => {
-                        saveData(true);
-                        Swal.fire('Sukses', 'Tersambung ke Spreadsheet!', 'success');
-                    })
-                    .catch(err => {
-                        let hint = "Cek koneksi internet.";
-                        if(err.message.includes("Failed")) hint = "Izin Ditolak. Pastikan Script dideploy sebagai 'Anyone'.";
-                        Swal.fire('Gagal', `${err.message}<br><br>${hint}`, 'error');
-                    });
-                }
-            });
-        }
-        
+        function renderSetup() { const html = `<div class="pt-20 px-6 fade-in pb-10"><h2 class="text-2xl font-bold text-gray-800 mb-4">Pengaturan</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4"><h3 class="font-bold text-blue-800 mb-2">Sinkronisasi Spreadsheet</h3><input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2"><div class="flex gap-2"><button onclick="saveApiUrl()" class="flex-1 btn-3d btn-blue px-2 py-2 rounded-lg text-sm font-bold">Simpan & Test</button><button onclick="forcePull()" class="flex-1 btn-3d btn-purple px-2 py-2 rounded-lg text-sm font-bold">Paksa Ambil Data</button></div></div><div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4"><h3 class="font-bold text-gray-700 mb-2">Backup Manual</h3><div class="flex gap-2"><button onclick="downloadBackup()" class="flex-1 btn-3d btn-green py-2 rounded-lg text-xs font-bold">Download Data</button><button onclick="triggerRestore()" class="flex-1 btn-3d btn-orange py-2 rounded-lg text-xs font-bold">Upload Data</button><input type="file" id="restoreInput" style="display:none" onchange="handleRestore(event)"></div></div><div class="space-y-3"><div><label class="block text-sm font-bold">Nama Sekolah</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-2 border rounded"></div><div><label class="block text-sm font-bold">Lokasi</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-2 border rounded"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold text-white">Simpan Profil</button></div><div class="mt-8 border-t pt-4"><button onclick="resetAll()" class="w-full py-3 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div><div class="text-center mt-4"><button onclick="renderTeacherDashboard()" class="text-gray-500 underline">Kembali</button></div></div>`; document.getElementById('appContent').innerHTML = html; }
+        function saveApiUrl() { let url = document.getElementById('apiUrlInput').value; if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; schoolData.apiUrl = url; saveData(true); forceTestWrite(url); }
         function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; saveData(); Swal.fire('Tersimpan', '', 'success'); }
         function renderAddStudent() { const html = `<div class="pt-20 px-6 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><form onsubmit="handleAddSubmit(event)" class="space-y-3"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div><input type="date" name="dob" class="w-full p-3 border rounded"><textarea name="address" placeholder="Alamat Lengkap" class="w-full p-3 border rounded" rows="2"></textarea><div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div><input type="file" id="photoInput" class="w-full p-2 bg-white rounded border"><button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button></form><button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button></div>`; document.getElementById('appContent').innerHTML = html; }
+        
         function handleAddSubmit(e) { e.preventDefault(); const btn = document.getElementById('btnSimpanSiswa'); btn.disabled = true; btn.innerText = "Menyimpan..."; const f = e.target; const newNIS = String(f.nis.value).trim(); if(students.find(s => String(s.nis).trim() === newNIS)) { btn.disabled = false; btn.innerText = "Simpan"; return Swal.fire('Gagal', 'NIS sudah ada', 'error'); } const photoInput = document.getElementById('photoInput'); const saveProcess = (photo) => { students.push({ name: f.name.value, nis: f.nis.value, kelas: f.kelas.value, dob: f.dob.value, address: f.address.value, photo: photo }); saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); }; if(photoInput.files[0]) { toBase64(photoInput.files[0]).then(res => saveProcess(res)); } else { saveProcess(""); } }
         function resetAll() { Swal.fire({ title: 'Reset Semua?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((result) => { if (result.isConfirmed) { localStorage.clear(); location.reload(); } }); }
+        function exportToExcel() { if(logs.length===0) return Swal.fire('Info', 'Data kosong', 'info'); const d = logs.map(l => ({...l})); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d), "Data"); XLSX.writeFile(wb, "DataPoin.xlsx"); }
+        function compressImage(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); const maxWidth = 300; const scaleSize = maxWidth / img.width; canvas.width = maxWidth; canvas.height = img.height * scaleSize; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', 0.6)); }; img.onerror = (err) => reject(err); }; reader.onerror = (err) => reject(err); }); }
+        function toBase64(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => resolve(r.result); r.onerror = error => reject(error); }); }
+        function downloadBackup() { const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors})); const downloadAnchorNode = document.createElement('a'); downloadAnchorNode.setAttribute("href", dataStr); downloadAnchorNode.setAttribute("download", "Backup_Poin_" + new Date().toISOString().slice(0,10) + ".json"); document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove(); }
+        function triggerRestore() { document.getElementById('restoreInput').click(); }
+        function handleRestore(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function(e) { try { const data = JSON.parse(e.target.result); if(data.students && data.logs) { students = data.students; logs = data.logs; behaviors = data.behaviors || behaviors; if(data.schoolData) schoolData = data.schoolData; saveData(true); Swal.fire('Berhasil', 'Data dipulihkan.', 'success').then(() => location.reload()); } else { Swal.fire('Gagal', 'Format salah.', 'error'); } } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); } }; reader.readAsText(file); }
 
         function renderStudentLogin() { const html = `<div class="flex flex-col items-center justify-center min-h-screen px-6 fade-in"><div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 text-3xl shadow-inner"><i class="fas fa-lock"></i></div><h2 class="text-2xl font-bold text-gray-800 mb-2">Login Murid</h2><input id="loginNis" placeholder="Masukkan NIS" class="w-full p-4 border rounded text-center text-xl mb-4"><button onclick="handleLogin()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white">Masuk</button><button onclick="goHome()" class="mt-4 text-gray-500">Kembali</button></div>`; document.getElementById('appContent').innerHTML = html; }
-        function handleLogin() { 
-            const nis = document.getElementById('loginNis').value.trim(); 
-            // Try local find first
-            const s = students.find(x => String(x.nis).trim() === nis); 
-            if(s) {
-                renderStudentDashboard(s);
-            } else {
-                 if(schoolData.apiUrl) {
-                    Swal.fire({
-                        title: 'Mencari Data...',
-                        didOpen: () => {
-                            Swal.showLoading();
-                            // Force fetch to check if new data exists
-                            fetch(schoolData.apiUrl + '?t=' + Date.now())
-                            .then(r => r.json())
-                            .then(data => {
-                                Swal.close();
-                                if(data.students) {
-                                    students = data.students; 
-                                    saveData(true);
-                                    const found = students.find(x => String(x.nis).trim() === nis);
-                                    if(found) renderStudentDashboard(found);
-                                    else Swal.fire('Gagal', 'NIS tidak ditemukan', 'error');
-                                }
-                            })
-                            .catch(() => Swal.fire('Gagal', 'NIS tidak ditemukan / Offline', 'error'));
-                        }
-                    });
-                } else {
-                    Swal.fire('Gagal', 'NIS tidak ditemukan', 'error');
-                }
-            } 
-        }
+        function handleLogin() { const nis = document.getElementById('loginNis').value.trim(); const s = students.find(x => String(x.nis).trim() === nis); if(s) { renderStudentDashboard(s); } else { if(schoolData.apiUrl) { Swal.fire({title: 'Mencari Data...', didOpen: () => { Swal.showLoading(); loadFromCloud(); setTimeout(() => { Swal.close(); const found = students.find(x => String(x.nis).trim() === nis); if(found) renderStudentDashboard(found); else Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); }, 3000); }}); } else { Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); } } }
+        function renderStudentDashboard(s) { const points = logs.filter(l => String(l.studentId) === String(s.nis)).reduce((sum, c) => sum + Number(c.points), 0); const studentLogs = logs.filter(l => String(l.studentId) === String(s.nis)).sort((a,b) => b.id - a.id); const good = studentLogs.filter(l => l.points > 0).map(l => `<div class="bg-green-50 p-2 mb-2 rounded border border-green-200 flex justify-between"><span>${l.behaviorLabel}</span><span class="font-bold text-green-600">+${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 text-xs">Belum ada</div>'; const bad = studentLogs.filter(l => l.points < 0).map(l => `<div class="bg-red-50 p-2 mb-2 rounded border border-red-200 flex justify-between"><span>${l.behaviorLabel}</span><span class="font-bold text-red-600">${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 text-xs">Belum ada</div>'; const notes = studentLogs.filter(l => l.note).map(l => `<div class="bg-blue-50 p-2 mb-2 rounded border border-blue-200 text-sm">"${l.note}"<br><small class="text-gray-400">${formatDate(l.date)}</small></div>`).join('') || '<div class="text-center text-gray-400 text-xs">Belum ada</div>'; const html = `<div class="pt-20 px-6 pb-10 fade-in"><div class="bg-white p-6 rounded-xl shadow-lg text-center mb-6"><div class="w-24 h-24 mx-auto bg-gray-200 rounded-full mb-3 overflow-hidden border-4 border-blue-100"><img src="${s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full object-cover"></div><h2 class="text-2xl font-bold text-gray-800">${s.name}</h2><p class="text-sm font-bold text-blue-500">${s.nis} | ${s.kelas}</p><p class="text-xs text-gray-500 mt-1"><i class="fas fa-map-marker-alt"></i> ${s.address || '-'}</p><div class="text-4xl font-black mt-4 ${points>=0?'text-green-600':'text-red-500'}">${points} Poin</div></div><div class="flex mb-4 bg-gray-200 p-1 rounded-xl"><button onclick="showTab('sgood', this)" class="flex-1 py-2 text-xs font-bold rounded-lg btn-green text-white shadow-sm transition">Positif</button><button onclick="showTab('sbad', this)" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 transition">Negatif</button><button onclick="showTab('snote', this)" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 transition">Pesan</button></div><div id="tab-sgood" class="tab-content h-64 overflow-y-auto">${good}</div><div id="tab-sbad" class="tab-content h-64 overflow-y-auto hidden">${bad}</div><div id="tab-snote" class="tab-content h-64 overflow-y-auto hidden">${notes}</div><button onclick="goHome()" class="w-full mt-4 py-3 text-gray-500 font-bold">Keluar</button></div>`; document.getElementById('appContent').innerHTML = html; }
 
-        function renderStudentDashboard(s) {
-            const points = logs.filter(l => String(l.studentId) === String(s.nis)).reduce((sum, c) => sum + Number(c.points), 0);
-            const studentLogs = logs.filter(l => String(l.studentId) === String(s.nis)).sort((a,b) => b.id - a.id);
-            const good = studentLogs.filter(l => l.points > 0).map(l => `<div class="bg-green-50 p-2 mb-2 rounded border border-green-200 flex justify-between"><span>${l.behaviorLabel}</span><span class="font-bold text-green-600">+${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 text-xs">Belum ada</div>';
-            const bad = studentLogs.filter(l => l.points < 0).map(l => `<div class="bg-red-50 p-2 mb-2 rounded border border-red-200 flex justify-between"><span>${l.behaviorLabel}</span><span class="font-bold text-red-600">${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 text-xs">Belum ada</div>';
-            const notes = studentLogs.filter(l => l.note).map(l => `<div class="bg-blue-50 p-2 mb-2 rounded border border-blue-200 text-sm">"${l.note}"<br><small class="text-gray-400">${formatDate(l.date)}</small></div>`).join('') || '<div class="text-center text-gray-400 text-xs">Belum ada</div>';
-
-            const html = `
-                <div class="pt-20 px-6 pb-10 fade-in">
-                    <div class="bg-white p-6 rounded-xl shadow-lg text-center mb-6">
-                        <div class="w-24 h-24 mx-auto bg-gray-200 rounded-full mb-3 overflow-hidden border-4 border-blue-100"><img src="${s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full object-cover"></div>
-                        <h2 class="text-2xl font-bold text-gray-800">${s.name}</h2>
-                        <p class="text-sm font-bold text-blue-500">${s.nis} | ${s.kelas}</p>
-                        <p class="text-xs text-gray-500 mt-1"><i class="fas fa-map-marker-alt"></i> ${s.address || '-'}</p>
-                        <div class="text-4xl font-black mt-4 ${points>=0?'text-green-600':'text-red-500'}">${points} Poin</div>
-                    </div>
-                    <div class="flex mb-4 bg-gray-200 p-1 rounded-xl"><button onclick="showTab('sgood', this)" class="flex-1 py-2 text-xs font-bold rounded-lg btn-green text-white shadow-sm transition">Positif</button><button onclick="showTab('sbad', this)" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 transition">Negatif</button><button onclick="showTab('snote', this)" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 transition">Pesan</button></div>
-                    <div id="tab-sgood" class="tab-content h-64 overflow-y-auto">${good}</div>
-                    <div id="tab-sbad" class="tab-content h-64 overflow-y-auto hidden">${bad}</div>
-                    <div id="tab-snote" class="tab-content h-64 overflow-y-auto hidden">${notes}</div>
-                    <button onclick="goHome()" class="w-full mt-4 py-3 text-gray-500 font-bold">Keluar</button>
-                </div>
-            `;
-            document.getElementById('appContent').innerHTML = html;
-        }
-
-        window.showTab = function(id, btn) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden')); document.getElementById('tab-'+id).classList.remove('hidden');
-            const parent = btn.parentElement; Array.from(parent.children).forEach(child => { child.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition"; });
-            if(id === 'sgood') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-green text-white shadow-sm transition";
-            if(id === 'sbad') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-red text-white shadow-sm transition";
-            if(id === 'snote') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-blue text-white shadow-sm transition";
-        }
-
-        function goHome() { renderModeSelection(); }
-        function toBase64(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => resolve(r.result); r.onerror = error => reject(error); }); }
-        function formatDate(d) { try { return new Date(d).toLocaleDateString('id-ID'); } catch(e) { return d; } }
         window.onload = function() { renderSplash(); if(schoolData.apiUrl) loadFromCloud(); };
     </script>
 </body>
