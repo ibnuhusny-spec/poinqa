@@ -14,7 +14,6 @@
     <style>
         body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
         
-        /* 3D Button Styles */
         .btn-3d {
             transition: all 0.1s; position: relative; transform: translateY(0);
             border-bottom-width: 4px; border-style: solid; color: white; 
@@ -96,9 +95,9 @@
             el.classList.remove('hidden');
             if(status === 'loading') { dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerText = "Sync..."; }
             else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Tersimpan"; setTimeout(() => { if(txt.innerText === "Tersimpan") txt.innerText = "Cloud Aktif"; }, 3000); }
-            else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
+            else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Gagal"; lastSyncError = message; }
         }
-        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Tenang, data aman di HP ini.`, 'info'); }
+        function showSyncError() { if(lastSyncError) Swal.fire('Diagnosa', `<div class="text-left text-xs text-red-600 font-mono bg-gray-100 p-2 rounded">${lastSyncError}</div><div class="text-xs mt-2">Tips: Cek URL & Izin Script.</div>`, 'error'); }
         
         function sendDataToScript(url, payload) {
             return fetch(url, {
@@ -106,11 +105,17 @@
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify(payload)
             }).then(r => {
-                if(!r.ok) throw new Error("HTTP " + r.status);
+                if(!r.ok) throw new Error("HTTP Error " + r.status + " " + r.statusText);
                 return r.text();
             }).then(t => {
                 try { return JSON.parse(t); } 
-                catch(e) { if(t.includes('success') || t.includes('data=') || t.includes('<html')) return {result:'success'}; throw new Error("Respon non-JSON"); }
+                catch(e) { 
+                    // Jika HTML (Biasanya halaman login Google atau error)
+                    if(t.includes("<!DOCTYPE html>")) throw new Error("URL Salah atau Script Privat. Respon berupa HTML.");
+                    // Jika sukses text
+                    if(t.includes('success')) return {result:'success'};
+                    throw new Error("Respon tidak valid: " + t.substring(0,30)); 
+                }
             });
         }
         
@@ -124,8 +129,10 @@
 
             debounceTimer = setTimeout(() => {
                 sendDataToScript(schoolData.apiUrl, payload).then(() => updateSyncUI('success')).catch(err => {
+                    // Fallback Blind Send (No-CORS) jika mode normal gagal
                     fetch(schoolData.apiUrl, { method: 'POST', mode: 'no-cors', headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) })
-                    .then(() => updateSyncUI('success')).catch(e => updateSyncUI('error', 'Gagal Total'));
+                    .then(() => updateSyncUI('success')) // Asumsikan sukses jika terkirim
+                    .catch(e => updateSyncUI('error', 'Koneksi Terputus Total'));
                 });
             }, 2000);
         }
@@ -137,27 +144,38 @@
                 if (cloudStudents.length > 0) {
                     students = cloudStudents.map(cloudS => {
                         const localS = localStudents.find(l => String(l.nis) === String(cloudS.nis));
-                        return { ...cloudS, photo: localS ? localS.photo : "" }; // Restore foto HP
+                        return { ...cloudS, photo: localS ? localS.photo : "" };
                     });
                     if(data.logs) logs = data.logs; if(data.behaviors) behaviors = data.behaviors;
                     if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; const myLogo = schoolData.logo; schoolData = data.schoolData; schoolData.apiUrl = myApi; schoolData.logo = myLogo; }
                     saveData(true); updateSyncUI('success'); if(document.getElementById('studentListContainer')) renderTeacherDashboard();
                 } else if (localStudents.length > 0) { syncToCloud(); } else { updateSyncUI('success'); }
-            }).catch(e => updateSyncUI('error', 'Offline'));
+            }).catch(e => updateSyncUI('error', 'Gagal Load Data Cloud'));
         }
         
         function forceTestWrite(url) {
             if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
             if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
             Swal.fire({ 
-                title: 'Test Koneksi...', text: 'Mengirim data ke Spreadsheet...', didOpen: () => { 
+                title: 'Diagnosa Koneksi...', 
+                html: 'Mencoba menghubungi server Google...', 
+                didOpen: () => { 
                     Swal.showLoading(); 
                     const payload = { schoolData: {name: schoolData.name, location: schoolData.location}, students: [{nis:"TEST-CONN", name:"Cek Koneksi", kelas:"-", dob:"", address:"-"}], logs: [], behaviors: behaviors }; 
                     sendDataToScript(url, payload).then(data => { 
-                        Swal.fire('Sukses!', 'Koneksi Berhasil!', 'success'); schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; 
+                        Swal.fire('Sukses!', 'Jalur Data Terbuka. Aplikasi siap digunakan.', 'success'); 
+                        schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; 
                     }).catch(err => { 
-                        let msg = err.message; if(msg.includes("Failed")) msg = "Koneksi diblokir. Pastikan Script di-Deploy sebagai 'Anyone'.";
-                        Swal.fire('Gagal', msg, 'error'); 
+                        let msg = err.message;
+                        let detail = "Tips: Cek deployment 'Anyone' (Siapa Saja) dan 'New Version'.";
+                        if(msg.includes("404")) { msg = "URL Script Tidak Ditemukan (404)"; detail = "Pastikan URL diakhiri /exec dan script sudah dideploy."; }
+                        else if(msg.includes("HTML")) { msg = "Akses Ditolak / Login Diperlukan"; detail = "Script mungkin tersetting 'Only Me'. Ubah ke 'Anyone'."; }
+                        
+                        Swal.fire({ 
+                            title: 'Koneksi Gagal', 
+                            html: `<p class="text-red-500 font-bold mb-2">${msg}</p><p class="text-xs bg-gray-100 p-2 rounded">${detail}</p>`, 
+                            icon: 'error' 
+                        }); 
                     }); 
                 } 
             });
@@ -173,20 +191,15 @@
                     img.src = event.target.result;
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        // Resize ke lebar 300px (Sangat ringan, cukup untuk pas foto HP)
-                        const maxWidth = 300;
+                        const maxWidth = 300; // Resize kecil
                         const scaleSize = maxWidth / img.width;
                         const newWidth = maxWidth;
                         const newHeight = img.height * scaleSize;
-
                         canvas.width = newWidth;
                         canvas.height = newHeight;
-                        
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, newWidth, newHeight);
-                        
-                        // Compress JPEG quality 0.6
-                        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6); // Compress Quality 60%
                         resolve(compressedDataUrl);
                     };
                     img.onerror = (err) => reject(err);
@@ -200,24 +213,7 @@
         function renderSplash() {
             document.getElementById('globalHeader').classList.add('hidden');
             const logoSrc = schoolData.logo || "logo.png";
-            
-            const html = `
-                <div class="flex flex-col items-center justify-center min-h-screen bg-pattern text-center p-6 fade-in">
-                    <div class="mb-4 relative animate-bounce">
-                        <div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden">
-                            <img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2">
-                        </div>
-                    </div>
-                    <h1 class="text-3xl font-black text-blue-600 mb-1 tracking-tight">Aplikasi Poin-QA</h1>
-                    <h2 class="text-xl font-bold text-gray-700 mb-1">${schoolData.name}</h2>
-                    <p class="text-md text-gray-500 font-medium mb-12">${schoolData.location}</p>
-                    <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button>
-                    <div class="absolute bottom-6 text-center w-full">
-                        <p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p>
-                        <p class="text-xs text-gray-400">Versi 25.0 (Auto-Compress)</p>
-                    </div>
-                </div>
-            `;
+            const html = `<div class="flex flex-col items-center justify-center min-h-screen bg-pattern text-center p-6 fade-in"><div class="mb-4 relative animate-bounce"><div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-1 tracking-tight">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-12">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 26.0 (Diagnostic)</p></div></div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
@@ -325,10 +321,9 @@
 
             const fileInput = document.getElementById('photoInputEdit');
             if (fileInput.files[0]) { 
-                // Compress before saving
-                compressImage(fileInput.files[0]).then(res => processUpdate(res));
+                compressImage(fileInput.files[0]).then(res => processUpdate(res)).catch(() => processUpdate(""));
             } else {
-                processUpdate(students[index].photo); // Keep old photo
+                processUpdate(students[index].photo); 
             }
         }
         
@@ -338,18 +333,21 @@
         
         function renderAddStudent() { const html = `<div class="pt-20 px-6 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><form onsubmit="handleAddSubmit(event)" class="space-y-3"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div><input type="date" name="dob" class="w-full p-3 border rounded"><textarea name="address" placeholder="Alamat Lengkap" class="w-full p-3 border rounded" rows="2"></textarea><div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div><input type="file" id="photoInput" class="w-full p-2 bg-white rounded border"><button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button></form><button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button></div>`; document.getElementById('appContent').innerHTML = html; }
         
+        // FIXED: CLEAN NIS CHECK
         function handleAddSubmit(e) { 
             e.preventDefault(); 
             const btn = document.getElementById('btnSimpanSiswa');
             btn.disabled = true; btn.innerText = "Menyimpan..."; 
             const f = e.target; 
             const newNIS = String(f.nis.value).trim();
-            if(students.find(s => String(s.nis).trim() === newNIS)) {
+            // Validasi: Pastikan students ada
+            if(!students) students = [];
+            
+            if(students.some(s => String(s.nis).trim() === newNIS)) {
                 btn.disabled = false; btn.innerText = "Simpan";
                 return Swal.fire('Gagal', 'NIS sudah ada', 'error'); 
             }
             
-            // Photo Handling with Auto Compression
             const photoInput = document.getElementById('photoInput'); 
             const saveProcess = (photo) => { 
                 students.push({ name: f.name.value, nis: f.nis.value, kelas: f.kelas.value, dob: f.dob.value, address: f.address.value, photo: photo }); 
@@ -358,14 +356,8 @@
             }; 
             
             if(photoInput.files[0]) { 
-                Swal.fire({title: 'Mengompresi Foto...', didOpen: () => Swal.showLoading()});
-                compressImage(photoInput.files[0]).then(res => {
-                    Swal.close();
-                    saveProcess(res);
-                }).catch(err => {
-                    Swal.close();
-                    saveProcess(""); // Save without photo if fail
-                });
+                Swal.fire({title: 'Memproses Foto...', didOpen: () => Swal.showLoading()});
+                compressImage(photoInput.files[0]).then(res => { Swal.close(); saveProcess(res); }).catch(() => { Swal.close(); saveProcess(""); });
             } 
             else { saveProcess(""); } 
         }
