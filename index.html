@@ -48,7 +48,7 @@
 
     <div id="loader"><div class="spinner mb-4"></div><p class="font-bold text-blue-500 animate-pulse" id="loaderText">Memuat...</p></div>
 
-    <!-- Iframe for Blind Sync -->
+    <!-- Hidden Iframe for Form Submission (The Secret Weapon) -->
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
     <form id="syncForm" method="POST" target="hidden_iframe" style="display:none;"><input type="hidden" name="data" id="syncDataInput"></form>
 
@@ -98,50 +98,38 @@
             const dot = document.getElementById('syncDot'); const txt = document.getElementById('syncText');
             el.classList.remove('hidden');
             if(status === 'loading') { dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerText = "Sync..."; }
-            else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Tersimpan"; setTimeout(() => { if(txt.innerText === "Tersimpan") txt.innerText = "Online"; }, 3000); }
+            else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Tersimpan"; setTimeout(() => { if(txt.innerText === "Tersimpan") txt.innerText = "Cloud Aktif"; }, 3000); }
             else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
         }
-        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data aman di HP.`, 'info'); }
+        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data tetap aman di HP.`, 'info'); }
         
+        // --- SYNC ENGINE (UPDATED LOGIC) ---
         function sendDataToScript(url, payload) {
-            return fetch(url, {
-                method: 'POST',
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(payload)
-            }).then(r => {
-                if(!r.ok) throw new Error("HTTP Error " + r.status);
-                return r.text();
-            }).then(t => {
-                try { return JSON.parse(t); } 
-                catch(e) { 
-                    if(t.includes('success') || t.includes('data=') || t.includes('<html')) return {result:'success'};
-                    throw new Error("Respon non-JSON"); 
-                }
-            });
+            const formData = new URLSearchParams(); formData.append('data', JSON.stringify(payload));
+            return fetch(url, { method: 'POST', body: formData }).then(r => { if(!r.ok) throw new Error(r.status); return r.text(); }).then(t => { try { return JSON.parse(t); } catch(e) { return {result:'success'}; } });
         }
         
-        // --- MULTI-DEVICE SYNC LOGIC ---
         function syncToCloud() {
             if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); updateSyncUI('loading');
             
-            // HYBRID SYNC: KIRIM TANPA FOTO (AGAR CEPAT)
+            // HYBRID SYNC: KIRIM TANPA FOTO (AGAR CEPAT & HEMAT)
             const lightStudents = students.map(s => { const { photo, ...sisa } = s; return sisa; });
             const lightSchoolData = { ...schoolData, logo: "" }; 
             const payload = { schoolData: lightSchoolData, students: lightStudents, logs, behaviors };
 
             debounceTimer = setTimeout(() => {
-                // Gunakan Iframe Form Post (Paling Stabil)
-                const form = document.getElementById('syncForm'); 
+                // FORM SUBMIT VIA IFRAME (Bypasses CORS)
+                const form = document.getElementById('syncForm');
                 const input = document.getElementById('syncDataInput');
-                if(form && input) { 
-                    try { 
-                        form.action = schoolData.apiUrl; 
-                        input.value = JSON.stringify(payload); 
-                        form.submit(); 
+                if(form && input) {
+                    try {
+                        form.action = schoolData.apiUrl;
+                        input.value = JSON.stringify(payload);
+                        form.submit();
                         setTimeout(() => updateSyncUI('success'), 1500); 
-                    } catch(e) { 
-                        updateSyncUI('error', 'Gagal Kirim'); 
-                    } 
+                    } catch(e) {
+                         updateSyncUI('error', 'Gagal Kirim');
+                    }
                 }
             }, 2000);
         }
@@ -149,77 +137,48 @@
         function loadFromCloud() {
             if(!schoolData.apiUrl) return; updateSyncUI('loading');
             fetch(schoolData.apiUrl).then(r => r.json()).then(data => {
-                // LOGIKA MULTI-DEVICE: CLOUD IS KING
-                // Jika Cloud punya data, dia akan menimpa data di HP (kecuali foto)
-                // Ini memastikan semua guru/device melihat data yang sama.
+                const cloudStudents = data.students || []; const localStudents = students || [];
                 
-                const cloudStudents = data.students || [];
+                // LOGIKA BARU: Jika Cloud berisi "Test Conn" (data palsu) dan Lokal berisi Data Asli (Banyak),
+                // JANGAN timpa Lokal. Sebaliknya, Kirim Lokal ke Cloud.
+                const isCloudDummy = cloudStudents.length === 1 && cloudStudents[0].nis && cloudStudents[0].nis.includes("TEST");
                 
-                if (cloudStudents.length > 0) {
+                if (!isCloudDummy && cloudStudents.length > 0) {
+                    // Cloud Valid -> Timpa Lokal (Merge)
                     students = cloudStudents.map(cloudS => {
-                        // Cari data lokal untuk restore foto (karena foto tidak disimpan di cloud)
-                        const localS = students.find(l => String(l.nis) === String(cloudS.nis));
-                        return { 
-                            ...cloudS, 
-                            photo: localS ? localS.photo : "" // Pakai foto lokal jika ada
-                        };
+                        const localS = localStudents.find(l => String(l.nis) === String(cloudS.nis));
+                        return { ...cloudS, photo: localS ? localS.photo : "" };
                     });
-                    
-                    if(data.logs) logs = data.logs; 
-                    if(data.behaviors) behaviors = data.behaviors;
-                    
-                    // Update settings jika ada
-                    if(data.schoolData && data.schoolData.name) { 
-                        const myApi = schoolData.apiUrl; 
-                        const myLogo = schoolData.logo; // Keep local logo filename
-                        schoolData = data.schoolData; 
-                        schoolData.apiUrl = myApi; 
-                        schoolData.logo = myLogo; 
-                    }
-                    
-                    // SIMPAN KE LOCAL STORAGE (JANGAN PUSH BALIK KE CLOUD)
-                    saveData(true); 
-                    updateSyncUI('success'); 
-                    if(document.getElementById('studentListContainer')) renderTeacherDashboard();
-                } else if (students.length > 0) { 
-                    // Jika Cloud KOSONG tapi HP ada isi -> Ini inisialisasi pertama -> Push ke Cloud
+                    if(data.logs) logs = data.logs; if(data.behaviors) behaviors = data.behaviors;
+                    if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; const myLogo = schoolData.logo; schoolData = data.schoolData; schoolData.apiUrl = myApi; schoolData.logo = myLogo; }
+                    saveData(true); updateSyncUI('success'); if(document.getElementById('studentListContainer')) renderTeacherDashboard();
+                } else if (localStudents.length > 0) { 
+                    // Cloud Kosong/Dummy tapi Lokal Ada Isi -> Push Lokal ke Cloud
                     syncToCloud(); 
                 } else { 
                     updateSyncUI('success'); 
                 }
-            }).catch(e => {
-                console.log(e);
-                updateSyncUI('error', 'Offline');
-            });
+            }).catch(e => updateSyncUI('error', 'Offline'));
         }
         
         function forceTestWrite(url) {
             if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
             if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
+            
+            // Set URL
+            schoolData.apiUrl = url; saveData(true);
+
             Swal.fire({ 
-                title: 'Tes Koneksi...', text: 'Mengirim data...', 
+                title: 'Menyimpan & Tes Koneksi...', 
+                text: 'Mengirim data AKTIF di layar ke Spreadsheet...', // FIX: Kirim data asli, bukan dummy
                 didOpen: () => { 
                     Swal.showLoading(); 
-                    const payload = { schoolData: {name: schoolData.name, location: schoolData.location}, students: [{nis:"TEST-CONN", name:"Cek Koneksi", kelas:"-", dob:"", address:"-"}], logs: [], behaviors: behaviors }; 
-                    
-                    // Test pakai Fetch normal dulu untuk diagnosa
-                    sendDataToScript(url, payload).then(data => { 
-                        Swal.fire('Sukses!', 'Jalur Data Terbuka.', 'success'); 
-                        schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; 
-                    }).catch(err => { 
-                         // Jika gagal, coba fallback Blind Send
-                         const form = document.getElementById('syncForm');
-                         const input = document.getElementById('syncDataInput');
-                         if(form) {
-                             form.action = url;
-                             input.value = JSON.stringify(payload);
-                             form.submit();
-                             Swal.fire('Sukses (Mode Jalur Darurat)', 'Koneksi normal diblokir, tapi Jalur Darurat berhasil. Data akan masuk ke Spreadsheet.', 'success');
-                             schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; 
-                         } else {
-                             Swal.fire('Gagal', `Error: ${err.message}`, 'error');
-                         }
-                    }); 
+                    // PANGGIL SYNC UTAMA (Kirim Data Asli)
+                    syncToCloud();
+                    setTimeout(() => {
+                        Swal.fire('Selesai', 'Data di layar telah dikirim ke Spreadsheet.<br>Silakan cek file Excel Anda.', 'success');
+                        document.querySelector('input[name="apiUrl"]').value = url;
+                    }, 2000);
                 } 
             });
         }
@@ -254,7 +213,7 @@
         function renderSplash() {
             document.getElementById('globalHeader').classList.add('hidden');
             const logoSrc = schoolData.logo || "logo.png";
-            const html = `<div class="flex flex-col items-center justify-center min-h-screen bg-pattern text-center p-6 fade-in"><div class="mb-4 relative animate-bounce"><div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-1 tracking-tight">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-12">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 31.0 (Multi-Device)</p></div></div>`;
+            const html = `<div class="flex flex-col items-center justify-center min-h-screen bg-pattern text-center p-6 fade-in"><div class="mb-4 relative animate-bounce"><div class="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-1 tracking-tight">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-12">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 32.0 (Fix Logic)</p></div></div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
