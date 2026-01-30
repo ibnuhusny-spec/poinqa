@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sistem Poin Siswa - SDIT Qurratu A'yun Al-Islami</title>
     
-    <!-- Tailwind CSS (Hanya untuk Layout, Warna kita pakai CSS sendiri di bawah agar aman) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -19,25 +19,62 @@
     <style>
         body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
         
-        /* --- 3D BUTTON STYLES (ANTI-GAGAL) --- */
+        /* --- 3D BUTTON STYLES (DIPERBAIKI) --- */
         .btn-3d {
-            transition: all 0.1s; position: relative; transform: translateY(0);
-            border-bottom: 4px solid; color: white;
+            transition: all 0.1s; 
+            position: relative; 
+            transform: translateY(0);
+            border-bottom-width: 4px;
+            border-style: solid;
+            color: white; /* Default text white */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
         }
-        .btn-3d:active { transform: translateY(4px); border-bottom-width: 0px !important; margin-top: 4px; }
+        .btn-3d:active { 
+            transform: translateY(4px); 
+            border-bottom-width: 0px !important; 
+            margin-top: 4px; 
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
 
-        /* WARNA PASTI (Tidak bergantung Tailwind) */
-        .btn-blue { background-color: #3b82f6; border-color: #1d4ed8; } /* Biru */
-        .btn-green { background-color: #22c55e; border-color: #15803d; } /* Hijau */
-        .btn-red { background-color: #ef4444; border-color: #b91c1c; } /* Merah */
-        .btn-orange { background-color: #f97316; border-color: #c2410c; } /* Orange */
-        .btn-gray { background-color: #6b7280; border-color: #374151; } /* Abu */
-        .btn-purple { background-color: #8b5cf6; border-color: #6d28d9; } /* Ungu */
-        .btn-yellow { background-color: #eab308; border-color: #a16207; } /* Kuning */
+        /* WARNA TOMBOL TEGAS (Hardcoded agar tidak hilang) */
+        .btn-blue { background-color: #3b82f6 !important; border-color: #1d4ed8 !important; color: white !important; } 
+        .btn-green { background-color: #22c55e !important; border-color: #15803d !important; color: white !important; } 
+        .btn-red { background-color: #ef4444 !important; border-color: #b91c1c !important; color: white !important; } 
+        .btn-orange { background-color: #f97316 !important; border-color: #c2410c !important; color: white !important; } 
+        .btn-gray { background-color: #6b7280 !important; border-color: #374151 !important; color: white !important; } 
+        .btn-purple { background-color: #8b5cf6 !important; border-color: #6d28d9 !important; color: white !important; } 
+        .btn-yellow { background-color: #eab308 !important; border-color: #a16207 !important; color: white !important; }
 
-        /* Warna Item Poin (Soft) */
-        .item-good { background-color: #dcfce7; color: #166534; border: 2px solid #86efac; border-bottom-width: 4px; }
-        .item-bad { background-color: #fee2e2; color: #991b1b; border: 2px solid #fca5a5; border-bottom-width: 4px; }
+        /* ITEM CARD STYLES (Untuk Kebaikan/Keburukan) */
+        .item-card {
+            border-bottom: 4px solid;
+            transition: all 0.1s;
+            position: relative;
+            background-color: white;
+        }
+        .item-card:active {
+            transform: translateY(4px);
+            border-bottom-width: 0px !important;
+            margin-top: 4px;
+        }
+        /* Item Kebaikan (Hijau Muda) */
+        .item-good { 
+            background-color: #f0fdf4 !important; 
+            border-color: #22c55e !important; 
+            color: #15803d !important; 
+        }
+        .badge-good { background-color: #22c55e; color: white; }
+
+        /* Item Keburukan (Merah Muda) */
+        .item-bad { 
+            background-color: #fef2f2 !important; 
+            border-color: #ef4444 !important; 
+            color: #b91c1c !important; 
+        }
+        .badge-bad { background-color: #ef4444; color: white; }
 
         /* Scrollbar Hide */
         ::-webkit-scrollbar { width: 0px; background: transparent; }
@@ -58,7 +95,7 @@
         
         <!-- HEADER -->
         <div id="globalHeader" class="hidden absolute top-4 right-4 z-50 flex gap-2">
-            <button onclick="goHome()" class="btn-3d btn-gray text-white font-bold p-2 rounded-full w-12 h-12 flex items-center justify-center shadow-lg">
+            <button onclick="goHome()" class="btn-3d btn-gray p-2 rounded-full w-12 h-12 shadow-lg">
                 <i class="fas fa-home text-xl"></i>
             </button>
         </div>
@@ -78,7 +115,7 @@
         const defaultSchoolData = {
             name: "SDIT Qurratu A'yun Al-Islami",
             location: "Kabupaten Maros",
-            logo: "logo.png", // Default logo.png lokal
+            logo: "logo.png",
             apiUrl: "" 
         };
 
@@ -98,12 +135,10 @@
 
         try {
             schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
-            // Safety: Jika nama sekolah hilang, reset tapi pertahankan API URL
             if (!schoolData.name) {
                 let savedApi = schoolData.apiUrl || "";
                 schoolData = { ...defaultSchoolData, apiUrl: savedApi };
             }
-            
             students = JSON.parse(localStorage.getItem('students')) || [];
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
@@ -111,7 +146,7 @@
             schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors;
         }
 
-        // Fungsi Simpan (Persistence)
+        // Fungsi Simpan
         function saveData(skipCloud = false) {
             localStorage.setItem('schoolData', JSON.stringify(schoolData));
             localStorage.setItem('students', JSON.stringify(students));
@@ -135,7 +170,7 @@
             
             el.classList.remove('hidden');
             if(status === 'loading') { dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerText = "Sync..."; }
-            else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Tersimpan"; setTimeout(() => { if(txt.innerText === "Tersimpan") txt.innerText = "Cloud Aktif"; }, 3000); }
+            else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Cloud Aktif"; }
             else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
         }
 
@@ -177,7 +212,6 @@
             fetch(schoolData.apiUrl)
             .then(r => r.json())
             .then(data => {
-                // LOGIKA PINTAR: Prioritaskan data yang lebih banyak
                 const cloudStudents = data.students || [];
                 const localStudents = students || [];
 
@@ -194,7 +228,6 @@
                     updateSyncUI('success');
                     if(document.getElementById('studentListContainer')) renderTeacherDashboard();
                 } else if (localStudents.length > 0) {
-                    // Jika Cloud kosong/sedikit, kirim data HP ke Cloud
                     syncToCloud();
                 } else {
                     updateSyncUI('success');
@@ -225,7 +258,7 @@
                     <h1 class="text-2xl font-bold text-blue-800 mb-2 leading-tight">${schoolData.name}</h1>
                     <p class="text-lg text-gray-600 font-medium mb-12">${schoolData.location}</p>
                     <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg">MULAI APLIKASI</button>
-                    <p class="absolute bottom-4 text-xs text-gray-400">Versi Final (Solid Buttons)</p>
+                    <p class="absolute bottom-4 text-xs text-gray-400">Versi 17.0 (Restored Input)</p>
                 </div>
             `;
             document.getElementById('appContent').innerHTML = html;
@@ -272,12 +305,12 @@
                 <div class="pt-20 px-4 pb-24 fade-in">
                     <h2 class="text-2xl font-bold text-gray-800 mb-4">Dashboard Guru</h2>
                     <div class="grid grid-cols-2 gap-3 mb-3">
-                        <button onclick="renderAddStudent()" class="btn-3d btn-blue py-3 rounded-lg text-sm font-bold">Tambah Siswa</button>
-                        <button onclick="renderManageBehaviors()" class="btn-3d btn-purple py-3 rounded-lg text-sm font-bold">Atur Poin</button>
+                        <button onclick="renderAddStudent()" class="btn-3d btn-blue py-3 rounded-lg text-sm font-bold"><i class="fas fa-user-plus mr-1"></i> Tambah Siswa</button>
+                        <button onclick="renderManageBehaviors()" class="btn-3d btn-purple py-3 rounded-lg text-sm font-bold"><i class="fas fa-list-check mr-1"></i> Atur Poin</button>
                     </div>
                     <div class="grid grid-cols-2 gap-3 mb-6">
-                         <button onclick="exportToExcel()" class="btn-3d btn-green py-3 rounded-lg text-sm font-bold">Download Excel</button>
-                        <button onclick="renderSetup()" class="btn-3d btn-gray py-3 rounded-lg text-sm font-bold">Setup & Cloud</button>
+                         <button onclick="exportToExcel()" class="btn-3d btn-green py-3 rounded-lg text-sm font-bold"><i class="fas fa-file-excel mr-1"></i> Download Excel</button>
+                        <button onclick="renderSetup()" class="btn-3d btn-gray py-3 rounded-lg text-sm font-bold"><i class="fas fa-cog mr-1"></i> Setup & Cloud</button>
                     </div>
                     <div class="relative mb-4">
                         <input type="text" id="searchStudent" onkeyup="filterStudents()" placeholder="Cari nama siswa..." class="w-full p-3 pl-10 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm">
@@ -297,11 +330,11 @@
 
             // BUTTONS GENERATOR
             const good = behaviors.filter(b => b.type === 'plus').map(b => 
-                `<button onclick="addPoint('${nis}', ${b.id})" class="btn-3d item-good p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight">${b.label}</span><span class="text-xs font-black mt-1 bg-green-500 text-white px-2 rounded-full">+${b.points}</span></button>`
+                `<button onclick="addPoint('${nis}', ${b.id})" class="item-card item-good p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-good px-2 rounded-full">+${b.points}</span></button>`
             ).join('');
 
             const bad = behaviors.filter(b => b.type === 'minus').map(b => 
-                `<button onclick="addPoint('${nis}', ${b.id})" class="btn-3d item-bad p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight">${b.label}</span><span class="text-xs font-black mt-1 bg-red-500 text-white px-2 rounded-full">${b.points}</span></button>`
+                `<button onclick="addPoint('${nis}', ${b.id})" class="item-card item-bad p-3 rounded-xl flex flex-col items-center justify-center h-24 active:scale-95"><i class="fas ${b.icon} text-2xl mb-1"></i><span class="text-xs font-bold leading-tight text-center">${b.label}</span><span class="text-[10px] font-black mt-1 badge-bad px-2 rounded-full">${b.points}</span></button>`
             ).join('');
 
             const html = `
@@ -309,8 +342,8 @@
                     <div class="bg-white rounded-2xl shadow-lg p-5 mb-6 text-center relative overflow-hidden">
                         <div class="absolute top-0 left-0 w-full h-20 bg-blue-500"></div>
                         <div class="absolute top-2 right-2 flex gap-2 z-20">
-                            <button onclick="renderEditStudent('${nis}')" class="bg-yellow-400 text-white p-2 rounded-lg text-xs font-bold"><i class="fas fa-edit"></i></button>
-                            <button onclick="deleteStudent('${nis}')" class="bg-red-500 text-white p-2 rounded-lg text-xs font-bold"><i class="fas fa-trash"></i></button>
+                            <button onclick="renderEditStudent('${nis}')" class="bg-yellow-400 text-white p-2 rounded-lg text-xs font-bold shadow-md"><i class="fas fa-edit"></i></button>
+                            <button onclick="deleteStudent('${nis}')" class="bg-red-500 text-white p-2 rounded-lg text-xs font-bold shadow-md"><i class="fas fa-trash"></i></button>
                         </div>
                         <div class="relative z-10 w-24 h-24 mx-auto bg-white rounded-full p-1 shadow-md -mb-12 mt-4"><img src="${student.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full rounded-full object-cover"></div>
                         <div class="mt-14">
@@ -321,7 +354,7 @@
                     </div>
 
                     <div class="flex mb-4 bg-gray-200 p-1 rounded-xl">
-                        <button onclick="showTab('good', this)" class="flex-1 py-2 text-sm font-bold rounded-lg btn-green text-white shadow-sm transition">Kebaikan</button>
+                        <button onclick="showTab('good', this)" class="flex-1 py-2 text-sm font-bold rounded-lg btn-green shadow-sm transition">Kebaikan</button>
                         <button onclick="showTab('bad', this)" class="flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition">Keburukan</button>
                         <button onclick="showTab('note', this)" class="flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition">Catatan</button>
                     </div>
@@ -353,7 +386,7 @@
                 child.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition";
             });
             
-            // Set Active Style based on tab
+            // Set Active Style
             if(id === 'good') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-green shadow-sm transition";
             if(id === 'bad') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-red shadow-sm transition";
             if(id === 'note') btn.className = "flex-1 py-2 text-sm font-bold rounded-lg btn-blue shadow-sm transition";
@@ -410,14 +443,29 @@
 
         function renderEditStudent(nis) { 
             const student = students.find(s => String(s.nis) === String(nis)); if (!student) return; 
-            const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${student.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700">NIS</label><input type="text" value="${student.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div><div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${student.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div><button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold">UPDATE</button><button type="button" onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button></form></div>`; 
+            const html = `
+                <div class="pt-20 px-6 pb-10 fade-in">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2>
+                    <form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4">
+                        <div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${student.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-bold text-gray-700">NIS</label><input type="text" value="${student.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div>
+                            <div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${student.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div>
+                        </div>
+                        <div><label class="block text-sm font-bold text-gray-700">Tanggal Lahir</label><input type="date" name="dob" value="${student.dob}" class="w-full p-3 rounded-lg border border-gray-300"></div>
+                        <div><label class="block text-sm font-bold text-gray-700">Alamat</label><textarea name="address" class="w-full p-3 rounded-lg border border-gray-300">${student.address}</textarea></div>
+                        <div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div>
+                        <button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold">UPDATE</button>
+                        <button type="button" onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button>
+                    </form>
+                </div>`; 
             document.getElementById('appContent').innerHTML = html; 
         }
 
         async function handleUpdateStudent(e, oldNis) { 
             e.preventDefault(); const form = e.target; const index = students.findIndex(s => String(s.nis) === String(oldNis)); if (index === -1) return; 
             let photoBase64 = students[index].photo; if (document.getElementById('photoInputEdit').files[0]) photoBase64 = await toBase64(document.getElementById('photoInputEdit').files[0]); 
-            students[index] = { ...students[index], name: form.name.value, kelas: form.kelas.value, photo: photoBase64 }; saveData(); 
+            students[index] = { ...students[index], name: form.name.value, kelas: form.kelas.value, dob: form.dob.value, address: form.address.value, photo: photoBase64 }; saveData(); 
             Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetail(oldNis)); 
         }
 
@@ -458,14 +506,23 @@
         }
 
         function renderAddStudent() {
+            // RESTORED: Full Form
             const html = `
                 <div class="pt-20 px-6 fade-in">
                     <h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2>
                     <form onsubmit="handleAddSubmit(event)" class="space-y-3">
                         <input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded">
-                        <input name="nis" placeholder="NIS" required class="w-full p-3 border rounded">
-                        <input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded">
-                        <button class="btn-3d btn-green w-full py-3 rounded font-bold">Simpan</button>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input name="nis" placeholder="NIS" required class="w-full p-3 border rounded">
+                            <input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded">
+                        </div>
+                        <div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div>
+                        <input type="date" name="dob" class="w-full p-3 border rounded">
+                        <textarea name="address" placeholder="Alamat Lengkap" class="w-full p-3 border rounded" rows="2"></textarea>
+                        <div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div>
+                        <input type="file" id="photoInput" class="w-full p-2 bg-white rounded border">
+                        
+                        <button class="btn-3d btn-green w-full py-3 rounded font-bold mt-4">Simpan</button>
                     </form>
                     <button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button>
                 </div>
@@ -476,8 +533,29 @@
         function handleAddSubmit(e) {
             e.preventDefault(); const f = e.target;
             if(students.find(s => String(s.nis) === String(f.nis.value))) return Swal.fire('Error', 'NIS sudah ada', 'error');
-            students.push({ name: f.name.value, nis: f.nis.value, kelas: f.kelas.value });
-            saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard());
+            
+            // Handle Photo
+            const photoInput = document.getElementById('photoInput');
+            let photoBase64 = "";
+            
+            const saveProcess = (photo) => {
+                students.push({ 
+                    name: f.name.value, 
+                    nis: f.nis.value, 
+                    kelas: f.kelas.value,
+                    dob: f.dob.value,
+                    address: f.address.value,
+                    photo: photo
+                });
+                saveData(); 
+                Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard());
+            };
+
+            if(photoInput.files[0]) {
+                toBase64(photoInput.files[0]).then(res => saveProcess(res));
+            } else {
+                saveProcess("");
+            }
         }
 
         function renderManageBehaviors() {
@@ -519,7 +597,6 @@
         function renderStudentDashboard(s) {
             const points = logs.filter(l => String(l.studentId) === String(s.nis)).reduce((a,b)=>a+b.points,0);
             
-            // Student Tabs
             const good = logs.filter(l => String(l.studentId)===String(s.nis) && l.points > 0).map(l => `<div class="bg-green-50 p-2 mb-2 rounded border border-green-200 flex justify-between"><span>${l.behaviorLabel}</span><span class="font-bold text-green-600">+${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 text-xs">Belum ada</div>';
             const bad = logs.filter(l => String(l.studentId)===String(s.nis) && l.points < 0).map(l => `<div class="bg-red-50 p-2 mb-2 rounded border border-red-200 flex justify-between"><span>${l.behaviorLabel}</span><span class="font-bold text-red-600">${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 text-xs">Belum ada</div>';
             const notes = logs.filter(l => String(l.studentId)===String(s.nis) && l.note).map(l => `<div class="bg-blue-50 p-2 mb-2 rounded border border-blue-200 text-sm">"${l.note}"<br><small class="text-gray-400">${formatDate(l.date)}</small></div>`).join('') || '<div class="text-center text-gray-400 text-xs">Belum ada</div>';
@@ -533,7 +610,7 @@
                     </div>
                     
                     <div class="flex mb-4 bg-gray-200 p-1 rounded-xl">
-                        <button onclick="showTab('sgood', this)" class="flex-1 py-2 text-xs font-bold rounded-lg btn-green text-white shadow-sm transition">Kebaikan</button>
+                        <button onclick="showTab('sgood', this)" class="flex-1 py-2 text-xs font-bold rounded-lg btn-green shadow-sm transition">Kebaikan</button>
                         <button onclick="showTab('sbad', this)" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 transition">Keburukan</button>
                         <button onclick="showTab('snote', this)" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 transition">Pesan</button>
                     </div>
