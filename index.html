@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sistem Poin Siswa - SDIT Qurratu A'yun Al-Islami</title>
     
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS (Abaikan warning di console, ini normal untuk mode standalone) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -120,6 +120,7 @@
         const defaultSchoolData = {
             name: "SDIT Qurratu A'yun Al-Islami",
             location: "Kabupaten Maros",
+            // Menggunakan URL gambar online agar tidak error "File Not Found"
             logo: "https://cdn-icons-png.flaticon.com/512/3209/3209265.png",
             apiUrl: "" 
         };
@@ -135,16 +136,22 @@
             { id: 8, type: 'minus', label: 'Buang Sampah Sembarangan', points: -5, icon: 'fa-trash' }
         ];
 
-        let schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
+        // LOAD DATA FROM LOCAL STORAGE WITH SAFETY CHECK
+        let storedSchoolData = localStorage.getItem('schoolData');
+        let schoolData = storedSchoolData ? JSON.parse(storedSchoolData) : defaultSchoolData;
+        
+        // Safety: Jika data rusak/kosong, kembalikan ke default, TAPI pertahankan API URL jika ada
+        if (!schoolData || !schoolData.name) {
+            const savedApi = schoolData ? schoolData.apiUrl : "";
+            schoolData = { ...defaultSchoolData };
+            if(savedApi) schoolData.apiUrl = savedApi;
+        }
+
         let students = JSON.parse(localStorage.getItem('students')) || [];
         let logs = JSON.parse(localStorage.getItem('logs')) || []; 
         let behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
         
-        if (schoolData.logo === "logo.png") {
-            schoolData.logo = "https://cdn-icons-png.flaticon.com/512/3209/3209265.png";
-            localStorage.setItem('schoolData', JSON.stringify(schoolData));
-        }
-
+        // Helper Save Data
         function saveData(skipCloud = false) {
             localStorage.setItem('schoolData', JSON.stringify(schoolData));
             localStorage.setItem('students', JSON.stringify(students));
@@ -156,7 +163,7 @@
             }
         }
 
-        // --- CLOUD SYNC LOGIC ---
+        // --- CLOUD SYNC LOGIC (FIXED FOR PERSISTENCE) ---
         let debounceTimer;
         let lastSyncError = "";
 
@@ -165,15 +172,29 @@
             const dot = document.getElementById('syncDot');
             const text = document.getElementById('syncText');
             if(!statusDiv) return;
+            
             statusDiv.classList.remove('hidden');
-            if (status === 'loading') { dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; text.innerText = "Menyimpan..."; }
-            else if (status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; text.innerText = "Tersimpan"; setTimeout(() => { if(text.innerText === "Tersimpan") text.innerText = "Cloud Aktif"; }, 3000); }
-            else if (status === 'error') { dot.className = "w-2 h-2 rounded-full bg-red-500"; text.innerText = "Gagal Sync"; lastSyncError = message; }
+            if (status === 'loading') { 
+                dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; 
+                text.innerText = "Menyimpan..."; 
+            } else if (status === 'success') { 
+                dot.className = "w-2 h-2 rounded-full bg-green-500"; 
+                text.innerText = "Tersimpan"; 
+                setTimeout(() => { if(text.innerText === "Tersimpan") text.innerText = "Cloud Aktif"; }, 3000); 
+            } else if (status === 'error') { 
+                dot.className = "w-2 h-2 rounded-full bg-red-500"; 
+                text.innerText = "Gagal Sync"; 
+                lastSyncError = message; 
+            }
         }
 
         function showSyncError() {
             if (lastSyncError) {
-                Swal.fire({ title: 'Status Koneksi', html: `<div class="text-left text-sm"><p class="font-bold text-red-600 mb-2">Pesan: ${lastSyncError}</p><p class="mb-2">Jika data tetap masuk ke Spreadsheet, abaikan pesan ini.</p></div>`, icon: 'warning' });
+                Swal.fire({ 
+                    title: 'Status Koneksi', 
+                    html: `<div class="text-left text-sm"><p class="font-bold text-red-600 mb-2">Pesan: ${lastSyncError}</p><p class="mb-2">Jika data Anda tetap ada saat aplikasi ditutup/buka, abaikan pesan ini.</p></div>`, 
+                    icon: 'warning' 
+                });
             }
         }
 
@@ -181,33 +202,90 @@
             const formData = new URLSearchParams();
             formData.append('data', JSON.stringify(payload));
             return fetch(url, { method: 'POST', body: formData })
-            .then(response => { if (!response.ok) throw new Error("HTTP " + response.status); return response.text(); })
-            .then(text => { try { return JSON.parse(text); } catch(e) { return { result: "success" }; } });
+                .then(response => { if (!response.ok) throw new Error("HTTP " + response.status); return response.text(); })
+                .then(text => { try { return JSON.parse(text); } catch(e) { return { result: "success" }; } });
         }
 
         function forceTestWrite(url) {
             if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
             if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
-            Swal.fire({ title: 'Menulis Data Test...', didOpen: () => { Swal.showLoading(); const payload = { schoolData: schoolData, students: [{nis:"TEST-CONN", name:"Cek Koneksi (Hapus Saya)", kelas:"-", dob:"", address:"Data Test", photo:""}], logs: [], behaviors: behaviors }; sendDataToScript(url, payload).then(data => { Swal.fire('Terkirim!', 'Cek Spreadsheet Anda.', 'success'); schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url; }).catch(err => { Swal.fire('Gagal Kirim', 'Koneksi bermasalah.', 'error'); }); } });
+            
+            Swal.fire({ 
+                title: 'Menulis Data Test...', 
+                didOpen: () => { 
+                    Swal.showLoading(); 
+                    const payload = { schoolData: schoolData, students: [{nis:"TEST-CONN", name:"Cek Koneksi (Hapus)", kelas:"-", dob:"", address:"-", photo:""}], logs: [], behaviors: behaviors }; 
+                    
+                    sendDataToScript(url, payload).then(data => { 
+                        Swal.fire('Berhasil!', 'Koneksi Spreadsheet Sukses.', 'success'); 
+                        schoolData.apiUrl = url; 
+                        saveData(true); // Save URL locally
+                        document.querySelector('input[name="apiUrl"]').value = url; 
+                    }).catch(err => { 
+                        Swal.fire('Gagal Kirim', 'Cek koneksi internet atau URL Script.', 'error'); 
+                    }); 
+                } 
+            });
         }
 
         function syncToCloud() {
             if (!schoolData.apiUrl) return;
             clearTimeout(debounceTimer);
             updateSyncUI('loading');
+            
             debounceTimer = setTimeout(() => {
                 const payload = { schoolData: schoolData, students: students, logs: logs, behaviors: behaviors };
-                sendDataToScript(schoolData.apiUrl, payload).then(data => { updateSyncUI('success'); lastSyncError = ""; }).catch(err => { fetch(schoolData.apiUrl, { method: 'POST', mode: 'no-cors', body: new URLSearchParams({data: JSON.stringify(payload)}) }).then(() => { updateSyncUI('success'); }).catch(e => { updateSyncUI('error', "Koneksi Terputus"); lastSyncError = err.message; }); });
+                sendDataToScript(schoolData.apiUrl, payload)
+                    .then(data => { updateSyncUI('success'); lastSyncError = ""; })
+                    .catch(err => { 
+                        // Fallback No-CORS
+                        fetch(schoolData.apiUrl, { method: 'POST', mode: 'no-cors', body: new URLSearchParams({data: JSON.stringify(payload)}) })
+                        .then(() => { updateSyncUI('success'); })
+                        .catch(e => { updateSyncUI('error', "Koneksi Terputus"); lastSyncError = err.message; }); 
+                    });
             }, 2000); 
         }
 
         function loadFromCloud() {
             if (!schoolData.apiUrl) return;
-            showLoader(true, "Mengambil Data...");
-            fetch(schoolData.apiUrl).then(response => response.json()).then(data => { if (data.students) students = data.students; if (data.logs) logs = data.logs; if (data.behaviors && data.behaviors.length > 0) behaviors = data.behaviors; const currentApi = schoolData.apiUrl; if (data.schoolData) schoolData = { ...data.schoolData, apiUrl: currentApi }; saveData(true); updateSyncUI('success'); if(document.getElementById('studentListContainer')) { renderTeacherDashboard(); } }).catch(err => { console.log("Load background gagal"); }).finally(() => { showLoader(false); });
+            
+            // Jangan tampilkan loader full screen agar tidak mengganggu, cukup status di pojok
+            updateSyncUI('loading'); 
+            
+            fetch(schoolData.apiUrl)
+            .then(response => response.json())
+            .then(data => { 
+                // --- SMART MERGE LOGIC ---
+                // Hanya update jika data cloud valid & tidak kosong
+                if (data.students && Array.isArray(data.students)) students = data.students;
+                if (data.logs && Array.isArray(data.logs)) logs = data.logs;
+                if (data.behaviors && data.behaviors.length > 0) behaviors = data.behaviors;
+                
+                // PENTING: Jangan timpa Settings lokal dengan Settings kosong dari cloud!
+                const cloudSettings = data.schoolData;
+                const currentApi = schoolData.apiUrl; // Simpan API URL lokal
+                
+                if (cloudSettings && cloudSettings.name && cloudSettings.name !== "") {
+                    // Jika cloud punya nama sekolah, pakai data cloud
+                    schoolData = { ...cloudSettings, apiUrl: currentApi };
+                } else {
+                    // Jika cloud kosong (misal baru dibuat), PERTAHANKAN data lokal, jangan ditimpa!
+                    console.log("Cloud settings kosong, mempertahankan setting lokal.");
+                }
+                
+                saveData(true); // Simpan hasil merge ke local storage
+                updateSyncUI('success'); 
+                
+                // Refresh UI jika sedang di dashboard
+                if(document.getElementById('studentListContainer')) { renderTeacherDashboard(); }
+                // Refresh Splash jika masih di halaman depan (opsional)
+            })
+            .catch(err => { 
+                console.log("Gagal load cloud, menggunakan data offline.");
+                updateSyncUI('error', 'Offline Mode');
+            });
         }
 
-        function showLoader(show, text = "Loading...") { const el = document.getElementById('loader'); const txt = document.getElementById('loaderText'); if (show) { txt.innerText = text; el.style.display = 'flex'; } else { el.style.display = 'none'; } }
         function formatDate(dateString) { const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }; try { return new Date(dateString).toLocaleDateString('id-ID', options); } catch (e) { return dateString; } }
 
         // --- VIEWS ---
@@ -224,7 +302,7 @@
                     <h1 class="text-2xl font-bold text-blue-800 mb-2 leading-tight">${schoolData.name}</h1>
                     <p class="text-lg text-gray-600 font-medium mb-12">${schoolData.location}</p>
                     <button onclick="renderModeSelection()" class="btn-3d w-full max-w-xs bg-primary hover:bg-sky-400 text-white font-bold py-4 px-8 rounded-xl border-b-4 border-primary-dark text-xl shadow-lg">MULAI APLIKASI</button>
-                    <p class="absolute bottom-4 text-xs text-gray-400">Versi 13.0 (Tabbed Interface)</p>
+                    <p class="absolute bottom-4 text-xs text-gray-400">Versi 14.0 (Persistence Fix)</p>
                 </div>
             `;
             document.getElementById('appContent').innerHTML = html;
@@ -307,7 +385,6 @@
             if (!student) return;
             const points = calculatePoints(student.nis);
             
-            // Filter Behaviors
             const goodBehaviors = behaviors.filter(b => b.type === 'plus');
             const badBehaviors = behaviors.filter(b => b.type === 'minus');
 
@@ -323,7 +400,6 @@
             });
             badHTML += '</div>';
 
-            // Notes Section
             let notesHTML = `
                 <div class="mb-4">
                     <label class="block text-sm font-bold text-gray-700 mb-2">Tulis Catatan untuk Wali Murid:</label>
@@ -340,7 +416,6 @@
 
             const html = `
                 <div class="pt-20 px-4 pb-10 fade-in">
-                    <!-- Profile Card -->
                     <div class="bg-white rounded-2xl shadow-lg p-5 mb-6 text-center relative overflow-hidden">
                         <div class="absolute top-0 left-0 w-full h-20 bg-blue-500"></div>
                         <div class="absolute top-2 right-2 flex gap-2 z-20">
@@ -355,25 +430,15 @@
                         </div>
                     </div>
 
-                    <!-- TABS NAVIGATION -->
                     <div class="flex mb-4 bg-gray-100 p-1 rounded-xl">
                         <button id="btn-good" onclick="switchTeacherTab('good')" class="flex-1 py-2 text-sm font-bold rounded-lg text-green-600 bg-white shadow-sm transition">Kebaikan</button>
                         <button id="btn-bad" onclick="switchTeacherTab('bad')" class="flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition">Keburukan</button>
                         <button id="btn-notes" onclick="switchTeacherTab('notes')" class="flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition">Catatan</button>
                     </div>
 
-                    <!-- TAB CONTENTS -->
-                    <div id="content-good" class="block min-h-[300px]">
-                        ${goodHTML}
-                        <div class="text-center text-xs text-gray-400 mt-2">Klik item untuk menambah poin</div>
-                    </div>
-                    <div id="content-bad" class="hidden min-h-[300px]">
-                        ${badHTML}
-                        <div class="text-center text-xs text-gray-400 mt-2">Klik item untuk mengurangi poin</div>
-                    </div>
-                    <div id="content-notes" class="hidden min-h-[300px]">
-                        ${notesHTML}
-                    </div>
+                    <div id="content-good" class="block min-h-[300px]">${goodHTML}<div class="text-center text-xs text-gray-400 mt-2">Klik item untuk menambah poin</div></div>
+                    <div id="content-bad" class="hidden min-h-[300px]">${badHTML}<div class="text-center text-xs text-gray-400 mt-2">Klik item untuk mengurangi poin</div></div>
+                    <div id="content-notes" class="hidden min-h-[300px]">${notesHTML}</div>
 
                     <div class="text-center mt-6"><button onclick="renderTeacherDashboard()" class="text-gray-500 font-bold underline">Kembali ke Dashboard</button></div>
                 </div>
@@ -381,7 +446,6 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
-        // JS for Tab Switching (Teacher)
         window.switchTeacherTab = function(tab) {
             const btnGood = document.getElementById('btn-good');
             const btnBad = document.getElementById('btn-bad');
@@ -390,33 +454,20 @@
             const contentBad = document.getElementById('content-bad');
             const contentNotes = document.getElementById('content-notes');
 
-            // Reset styles
             btnGood.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition";
             btnBad.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition";
             btnNotes.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 transition";
-            
-            contentGood.classList.add('hidden');
-            contentBad.classList.add('hidden');
-            contentNotes.classList.add('hidden');
+            contentGood.classList.add('hidden'); contentBad.classList.add('hidden'); contentNotes.classList.add('hidden');
 
-            // Apply active styles
-            if(tab === 'good') {
-                btnGood.className = "flex-1 py-2 text-sm font-bold rounded-lg text-green-600 bg-white shadow-sm transition";
-                contentGood.classList.remove('hidden');
-            } else if(tab === 'bad') {
-                btnBad.className = "flex-1 py-2 text-sm font-bold rounded-lg text-red-600 bg-white shadow-sm transition";
-                contentBad.classList.remove('hidden');
-            } else {
-                btnNotes.className = "flex-1 py-2 text-sm font-bold rounded-lg text-blue-600 bg-white shadow-sm transition";
-                contentNotes.classList.remove('hidden');
-            }
+            if(tab === 'good') { btnGood.className = "flex-1 py-2 text-sm font-bold rounded-lg text-green-600 bg-white shadow-sm transition"; contentGood.classList.remove('hidden'); } 
+            else if(tab === 'bad') { btnBad.className = "flex-1 py-2 text-sm font-bold rounded-lg text-red-600 bg-white shadow-sm transition"; contentBad.classList.remove('hidden'); } 
+            else { btnNotes.className = "flex-1 py-2 text-sm font-bold rounded-lg text-blue-600 bg-white shadow-sm transition"; contentNotes.classList.remove('hidden'); }
         }
 
-        // 8. STUDENT DASHBOARD - TABBED INTERFACE
+        // 8. STUDENT DASHBOARD
         function renderStudentDashboard(student) {
             const points = calculatePoints(student.nis);
             const allLogs = logs.filter(l => String(l.studentId) === String(student.nis)).sort((a,b) => b.id - a.id);
-            
             const positiveLogs = allLogs.filter(l => l.points > 0);
             const negativeLogs = allLogs.filter(l => l.points < 0);
             const noteLogs = allLogs.filter(l => l.behaviorLabel === "Catatan Guru");
@@ -427,23 +478,12 @@
                     let color = type === 'pos' ? 'text-green-600' : (type === 'neg' ? 'text-red-500' : 'text-blue-600');
                     let bg = type === 'pos' ? 'bg-green-50' : (type === 'neg' ? 'bg-red-50' : 'bg-blue-50');
                     let icon = type === 'pos' ? 'fa-check-circle' : (type === 'neg' ? 'fa-exclamation-circle' : 'fa-comment-alt');
-                    
-                    return `
-                        <div class="flex items-start gap-3 p-3 mb-2 rounded-lg ${bg} border border-opacity-50 border-gray-200">
-                            <i class="fas ${icon} ${color} mt-1"></i>
-                            <div class="flex-grow">
-                                <div class="flex justify-between items-start"><span class="font-bold text-gray-700 text-sm">${log.behaviorLabel}</span><span class="font-black text-sm ${color}">${type==='note'?'':(log.points>0?'+'+log.points:log.points)}</span></div>
-                                <div class="text-xs text-gray-500 mt-1"><i class="far fa-clock mr-1"></i>${formatDate(log.date)}</div>
-                                ${log.note ? `<div class="mt-1 text-xs italic text-gray-600 bg-white p-2 rounded border border-gray-100">"${log.note}"</div>` : ''}
-                            </div>
-                        </div>
-                    `;
+                    return `<div class="flex items-start gap-3 p-3 mb-2 rounded-lg ${bg} border border-opacity-50 border-gray-200"><i class="fas ${icon} ${color} mt-1"></i><div class="flex-grow"><div class="flex justify-between items-start"><span class="font-bold text-gray-700 text-sm">${log.behaviorLabel}</span><span class="font-black text-sm ${color}">${type==='note'?'':(log.points>0?'+'+log.points:log.points)}</span></div><div class="text-xs text-gray-500 mt-1"><i class="far fa-clock mr-1"></i>${formatDate(log.date)}</div>${log.note ? `<div class="mt-1 text-xs italic text-gray-600 bg-white p-2 rounded border border-gray-100">"${log.note}"</div>` : ''}</div></div>`;
                 }).join('');
             };
 
             const html = `
                 <div class="pt-20 px-4 pb-10 fade-in">
-                    <!-- ID Card -->
                     <div class="bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden mb-6">
                         <div class="absolute -right-4 -top-4 w-24 h-24 bg-white opacity-20 rounded-full"></div>
                         <div class="flex items-center gap-4 relative z-10">
@@ -455,14 +495,11 @@
                             <div class="text-right"><span class="block text-xs uppercase opacity-80">Total Poin</span><span class="text-4xl font-black">${points}</span></div>
                         </div>
                     </div>
-
-                    <!-- TABS NAVIGATION STUDENT -->
                     <div class="flex mb-4 bg-white p-1 rounded-xl shadow-sm border border-gray-100">
                         <button id="s-btn-pos" onclick="switchStudentTab('pos')" class="flex-1 py-2 text-xs font-bold rounded-lg text-green-600 bg-green-50 shadow-sm transition">Kebaikan</button>
                         <button id="s-btn-neg" onclick="switchStudentTab('neg')" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-400 transition">Keburukan</button>
                         <button id="s-btn-note" onclick="switchStudentTab('note')" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-400 transition">Pesan Guru</button>
                     </div>
-
                     <div id="s-content-pos" class="block min-h-[300px]">${createLogHTML(positiveLogs, 'pos')}</div>
                     <div id="s-content-neg" class="hidden min-h-[300px]">${createLogHTML(negativeLogs, 'neg')}</div>
                     <div id="s-content-note" class="hidden min-h-[300px]">${createLogHTML(noteLogs, 'note')}</div>
@@ -471,96 +508,25 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
-        // JS for Tab Switching (Student)
         window.switchStudentTab = function(tab) {
-            const btnPos = document.getElementById('s-btn-pos');
-            const btnNeg = document.getElementById('s-btn-neg');
-            const btnNote = document.getElementById('s-btn-note');
-            
-            const contentPos = document.getElementById('s-content-pos');
-            const contentNeg = document.getElementById('s-content-neg');
-            const contentNote = document.getElementById('s-content-note');
-
-            // Reset
-            btnPos.className = "flex-1 py-2 text-xs font-bold rounded-lg text-gray-400 transition";
-            btnNeg.className = "flex-1 py-2 text-xs font-bold rounded-lg text-gray-400 transition";
-            btnNote.className = "flex-1 py-2 text-xs font-bold rounded-lg text-gray-400 transition";
-            
-            contentPos.classList.add('hidden');
-            contentNeg.classList.add('hidden');
-            contentNote.classList.add('hidden');
-
-            if(tab === 'pos') {
-                btnPos.className = "flex-1 py-2 text-xs font-bold rounded-lg text-green-600 bg-green-50 shadow-sm transition";
-                contentPos.classList.remove('hidden');
-            } else if(tab === 'neg') {
-                btnNeg.className = "flex-1 py-2 text-xs font-bold rounded-lg text-red-600 bg-red-50 shadow-sm transition";
-                contentNeg.classList.remove('hidden');
-            } else {
-                btnNote.className = "flex-1 py-2 text-xs font-bold rounded-lg text-blue-600 bg-blue-50 shadow-sm transition";
-                contentNote.classList.remove('hidden');
-            }
+            const btnPos = document.getElementById('s-btn-pos'); const btnNeg = document.getElementById('s-btn-neg'); const btnNote = document.getElementById('s-btn-note');
+            const contentPos = document.getElementById('s-content-pos'); const contentNeg = document.getElementById('s-content-neg'); const contentNote = document.getElementById('s-content-note');
+            btnPos.className = "flex-1 py-2 text-xs font-bold rounded-lg text-gray-400 transition"; btnNeg.className = "flex-1 py-2 text-xs font-bold rounded-lg text-gray-400 transition"; btnNote.className = "flex-1 py-2 text-xs font-bold rounded-lg text-gray-400 transition";
+            contentPos.classList.add('hidden'); contentNeg.classList.add('hidden'); contentNote.classList.add('hidden');
+            if(tab === 'pos') { btnPos.className = "flex-1 py-2 text-xs font-bold rounded-lg text-green-600 bg-green-50 shadow-sm transition"; contentPos.classList.remove('hidden'); }
+            else if(tab === 'neg') { btnNeg.className = "flex-1 py-2 text-xs font-bold rounded-lg text-red-600 bg-red-50 shadow-sm transition"; contentNeg.classList.remove('hidden'); }
+            else { btnNote.className = "flex-1 py-2 text-xs font-bold rounded-lg text-blue-600 bg-blue-50 shadow-sm transition"; contentNote.classList.remove('hidden'); }
         }
 
-        // ... (Keep existing edit/delete/save functions same as previous) ...
-        function deleteStudent(nis) {
-            Swal.fire({ title: 'Hapus Siswa?', text: "Data akan hilang!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Ya' }).then((result) => { if (result.isConfirmed) { students = students.filter(s => String(s.nis) !== String(nis)); logs = logs.filter(l => String(l.studentId) !== String(nis)); saveData(); Swal.fire('Terhapus', '', 'success').then(() => renderTeacherDashboard()); } })
-        }
-
-        function renderEditStudent(nis) {
-            const student = students.find(s => String(s.nis) === String(nis));
-            if (!student) return;
-            const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${student.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700">NIS (Tetap)</label><input type="text" value="${student.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div><div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${student.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700">Tgl Lahir</label><input type="date" name="dob" value="${student.dob}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700">Alamat</label><textarea name="address" class="w-full p-3 rounded-lg border border-gray-300">${student.address}</textarea></div><div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div><button class="btn-3d w-full mt-6 bg-yellow-500 text-white font-bold py-3 rounded-xl border-b-4 border-yellow-700">UPDATE</button><button type="button" onclick="renderStudentDetailGuru('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button></form></div>`;
-            document.getElementById('appContent').innerHTML = html;
-        }
-
-        async function handleUpdateStudent(e, oldNis) {
-            e.preventDefault();
-            const form = e.target;
-            const index = students.findIndex(s => String(s.nis) === String(oldNis));
-            if (index === -1) return;
-            let photoBase64 = students[index].photo;
-            if (document.getElementById('photoInputEdit').files[0]) photoBase64 = await toBase64(document.getElementById('photoInputEdit').files[0]);
-            students[index] = { ...students[index], name: form.name.value, kelas: form.kelas.value, dob: form.dob.value, address: form.address.value, photo: photoBase64 };
-            saveData();
-            Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetailGuru(oldNis));
-        }
-
-        // ... (Keep addPoint, addNoteOnly, etc. same) ...
-        function addPoint(nis, behaviorId) {
-            const behavior = behaviors.find(b => b.id === behaviorId);
-            const noteInput = document.getElementById('noteInput') ? document.getElementById('noteInput').value : '';
-            logs.push({ id: Date.now(), studentId: nis, behaviorLabel: behavior.label, points: behavior.points, type: behavior.type, date: new Date().toISOString(), note: noteInput });
-            saveData();
-            const isPlus = behavior.type === 'plus';
-            Swal.fire({ title: isPlus ? 'Alhamdulillah!' : 'Perhatian!', text: `${behavior.label} (${isPlus ? '+' : ''}${behavior.points})`, icon: isPlus ? 'success' : 'warning', timer: 1000, showConfirmButton: false }).then(() => renderStudentDetailGuru(nis));
-        }
-
-        function addNoteOnly(nis) {
-            const noteInput = document.getElementById('noteInput').value;
-            if(!noteInput) return;
-            logs.push({ id: Date.now(), studentId: nis, behaviorLabel: "Catatan Guru", points: 0, type: 'neutral', date: new Date().toISOString(), note: noteInput });
-            saveData();
-            Swal.fire('Terkirim', '', 'success').then(()=> renderStudentDetailGuru(nis));
-        }
-
-        // ... (Keep handleAddBehavior, deleteBehavior, renderManageBehaviors same) ...
-        function renderManageBehaviors() {
-            let listHTML = '';
-            behaviors.forEach((b, index) => {
-                const isPlus = b.type === 'plus';
-                listHTML += `<div class="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm mb-2 border-l-4 ${isPlus ? 'border-green-500' : 'border-red-500'}"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full ${isPlus ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} flex items-center justify-center"><i class="fas ${b.icon} text-sm"></i></div><div><div class="font-bold text-sm text-gray-700">${b.label}</div><div class="text-xs font-bold ${isPlus ? 'text-green-600' : 'text-red-600'}">${isPlus ? '+' : ''}${b.points} Poin</div></div></div><button onclick="deleteBehavior(${index})" class="text-red-400 hover:text-red-600 p-2"><i class="fas fa-trash"></i></button></div>`;
-            });
-            const html = `<div class="pt-20 px-4 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-4">Atur Item Poin</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6"><h3 class="font-bold text-blue-800 mb-3 text-sm">Tambah Item Baru</h3><form onsubmit="handleAddBehavior(event)" class="space-y-3"><input type="text" name="label" placeholder="Nama Perilaku" required class="w-full p-2 rounded border text-sm"><div class="flex gap-2"><select name="type" class="w-1/2 p-2 rounded border text-sm bg-white"><option value="plus">Kebaikan (+)</option><option value="minus">Keburukan (-)</option></select><input type="number" name="points" placeholder="Nilai" required class="w-1/2 p-2 rounded border text-sm"></div><button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm shadow-md active:scale-95 transition">Tambahkan</button></form></div><div class="mb-4"><h3 class="font-bold text-gray-600 mb-2 text-sm">Daftar Item Saat Ini:</h3>${listHTML}</div><button onclick="renderTeacherDashboard()" class="w-full py-3 text-gray-500 font-bold">Kembali ke Dashboard</button></div>`;
-            document.getElementById('appContent').innerHTML = html;
-        }
-
-        function handleAddBehavior(e) {
-            e.preventDefault(); const form = e.target; const type = form.type.value; const icon = type === 'plus' ? 'fa-star' : 'fa-triangle-exclamation'; let points = Math.abs(parseInt(form.points.value)); if(type === 'minus' && points > 0) points = -points; if(type === 'plus' && points < 0) points = Math.abs(points); behaviors.push({ id: Date.now(), type, label: form.label.value, points, icon }); saveData(); renderManageBehaviors(); Swal.fire('Sukses', 'Item ditambahkan', 'success');
-        }
+        // ... (Keep existing CRUD functions) ...
+        function deleteStudent(nis) { Swal.fire({ title: 'Hapus Siswa?', text: "Data akan hilang!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Ya' }).then((result) => { if (result.isConfirmed) { students = students.filter(s => String(s.nis) !== String(nis)); logs = logs.filter(l => String(l.studentId) !== String(nis)); saveData(); Swal.fire('Terhapus', '', 'success').then(() => renderTeacherDashboard()); } }) }
+        function renderEditStudent(nis) { const student = students.find(s => String(s.nis) === String(nis)); if (!student) return; const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${student.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700">NIS (Tetap)</label><input type="text" value="${student.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div><div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${student.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700">Tgl Lahir</label><input type="date" name="dob" value="${student.dob}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700">Alamat</label><textarea name="address" class="w-full p-3 rounded-lg border border-gray-300">${student.address}</textarea></div><div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div><button class="btn-3d w-full mt-6 bg-yellow-500 text-white font-bold py-3 rounded-xl border-b-4 border-yellow-700">UPDATE</button><button type="button" onclick="renderStudentDetailGuru('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button></form></div>`; document.getElementById('appContent').innerHTML = html; }
+        async function handleUpdateStudent(e, oldNis) { e.preventDefault(); const form = e.target; const index = students.findIndex(s => String(s.nis) === String(oldNis)); if (index === -1) return; let photoBase64 = students[index].photo; if (document.getElementById('photoInputEdit').files[0]) photoBase64 = await toBase64(document.getElementById('photoInputEdit').files[0]); students[index] = { ...students[index], name: form.name.value, kelas: form.kelas.value, dob: form.dob.value, address: form.address.value, photo: photoBase64 }; saveData(); Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetailGuru(oldNis)); }
+        function addPoint(nis, behaviorId) { const behavior = behaviors.find(b => b.id === behaviorId); const noteInput = document.getElementById('noteInput') ? document.getElementById('noteInput').value : ''; logs.push({ id: Date.now(), studentId: nis, behaviorLabel: behavior.label, points: behavior.points, type: behavior.type, date: new Date().toISOString(), note: noteInput }); saveData(); const isPlus = behavior.type === 'plus'; Swal.fire({ title: isPlus ? 'Alhamdulillah!' : 'Perhatian!', text: `${behavior.label} (${isPlus ? '+' : ''}${behavior.points})`, icon: isPlus ? 'success' : 'warning', timer: 1000, showConfirmButton: false }).then(() => renderStudentDetailGuru(nis)); }
+        function addNoteOnly(nis) { const noteInput = document.getElementById('noteInput').value; if(!noteInput) return; logs.push({ id: Date.now(), studentId: nis, behaviorLabel: "Catatan Guru", points: 0, type: 'neutral', date: new Date().toISOString(), note: noteInput }); saveData(); Swal.fire('Terkirim', '', 'success').then(()=> renderStudentDetailGuru(nis)); }
+        function renderManageBehaviors() { let listHTML = ''; behaviors.forEach((b, index) => { const isPlus = b.type === 'plus'; listHTML += `<div class="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm mb-2 border-l-4 ${isPlus ? 'border-green-500' : 'border-red-500'}"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full ${isPlus ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} flex items-center justify-center"><i class="fas ${b.icon} text-sm"></i></div><div><div class="font-bold text-sm text-gray-700">${b.label}</div><div class="text-xs font-bold ${isPlus ? 'text-green-600' : 'text-red-600'}">${isPlus ? '+' : ''}${b.points} Poin</div></div></div><button onclick="deleteBehavior(${index})" class="text-red-400 hover:text-red-600 p-2"><i class="fas fa-trash"></i></button></div>`; }); const html = `<div class="pt-20 px-4 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-4">Atur Item Poin</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6"><h3 class="font-bold text-blue-800 mb-3 text-sm">Tambah Item Baru</h3><form onsubmit="handleAddBehavior(event)" class="space-y-3"><input type="text" name="label" placeholder="Nama Perilaku" required class="w-full p-2 rounded border text-sm"><div class="flex gap-2"><select name="type" class="w-1/2 p-2 rounded border text-sm bg-white"><option value="plus">Kebaikan (+)</option><option value="minus">Keburukan (-)</option></select><input type="number" name="points" placeholder="Nilai" required class="w-1/2 p-2 rounded border text-sm"></div><button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm shadow-md active:scale-95 transition">Tambahkan</button></form></div><div class="mb-4"><h3 class="font-bold text-gray-600 mb-2 text-sm">Daftar Item Saat Ini:</h3>${listHTML}</div><button onclick="renderTeacherDashboard()" class="w-full py-3 text-gray-500 font-bold">Kembali ke Dashboard</button></div>`; document.getElementById('appContent').innerHTML = html; }
+        function handleAddBehavior(e) { e.preventDefault(); const form = e.target; const type = form.type.value; const icon = type === 'plus' ? 'fa-star' : 'fa-triangle-exclamation'; let points = Math.abs(parseInt(form.points.value)); if(type === 'minus' && points > 0) points = -points; if(type === 'plus' && points < 0) points = Math.abs(points); behaviors.push({ id: Date.now(), type, label: form.label.value, points, icon }); saveData(); renderManageBehaviors(); Swal.fire('Sukses', 'Item ditambahkan', 'success'); }
         function deleteBehavior(index) { Swal.fire({ title: 'Hapus?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya' }).then((result) => { if (result.isConfirmed) { behaviors.splice(index, 1); saveData(); renderManageBehaviors(); } }); }
-
-        // ... (Keep renderAddStudent, handleSaveStudent, renderSetup, handleSaveSetup, resetData, renderStudentLogin, handleStudentLogin, goHome, calculatePoints, exportToExcel, toBase64 same) ...
         function renderAddStudent() { const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Input Data Siswa</h2><form onsubmit="handleSaveStudent(event)" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700 mb-1">Nama Lengkap</label><input type="text" name="name" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700 mb-1">NIS</label><input type="text" name="nis" required class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700 mb-1">Kelas</label><input type="text" name="kelas" required class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700 mb-1">Tanggal Lahir</label><input type="date" name="dob" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700 mb-1">Alamat</label><textarea name="address" rows="2" class="w-full p-3 rounded-lg border border-gray-300"></textarea></div><div><label class="block text-sm font-bold text-gray-700 mb-1">Foto Siswa</label><input type="file" id="photoInput" accept="image/*" class="w-full p-2 bg-white rounded-lg border border-gray-300 text-sm"></div><button type="submit" class="btn-3d w-full mt-6 bg-success hover:bg-green-400 text-white font-bold py-3 rounded-xl border-b-4 border-success-dark">SIMPAN DATA</button><button type="button" onclick="renderTeacherDashboard()" class="w-full mt-2 py-3 text-gray-500 font-bold">Batal</button></form></div>`; document.getElementById('appContent').innerHTML = html; }
         async function handleSaveStudent(e) { e.preventDefault(); const form = e.target; const photoFile = document.getElementById('photoInput').files[0]; let photoBase64 = ''; if (photoFile) photoBase64 = await toBase64(photoFile); if (students.find(s => String(s.nis) === String(form.nis.value))) { Swal.fire('Error', 'NIS sudah terdaftar!', 'error'); return; } students.push({ name: form.name.value, nis: form.nis.value, kelas: form.kelas.value, dob: form.dob.value, address: form.address.value, photo: photoBase64 }); saveData(); Swal.fire('Sukses', 'Data disimpan', 'success').then(() => renderTeacherDashboard()); }
         function renderSetup() { const html = `<div class="pt-20 px-6 fade-in pb-10"><h2 class="text-2xl font-bold text-gray-800 mb-4">Pengaturan & Cloud</h2><form onsubmit="handleSaveSetup(event)" class="space-y-4"><div class="bg-blue-50 p-4 rounded-xl border border-blue-200"><h3 class="font-bold text-blue-800 mb-2 flex items-center gap-2"><i class="fas fa-cloud"></i> Sinkronisasi Spreadsheet</h3><input type="text" name="apiUrl" value="${schoolData.apiUrl || ''}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full p-2 text-sm rounded border border-blue-300 mb-2"><div class="flex gap-2 mb-2"><button type="button" onclick="forceTestWrite(document.querySelector('input[name=\\'apiUrl\\']').value)" class="bg-orange-500 text-white px-4 py-3 rounded-lg text-xs font-bold w-full shadow-md">TEST WRITE</button></div><div class="flex gap-2"><button type="button" onclick="loadFromCloud()" class="bg-blue-600 text-white px-3 py-2 rounded text-xs font-bold flex-1">Ambil Data</button><button type="button" onclick="syncToCloud()" class="bg-green-600 text-white px-3 py-2 rounded text-xs font-bold flex-1">Simpan Cloud</button></div></div><div><label class="block text-sm font-bold text-gray-700 mb-1">Nama Sekolah</label><input type="text" name="schoolName" value="${schoolData.name}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700 mb-1">Lokasi</label><input type="text" name="location" value="${schoolData.location}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700 mb-1">Logo URL</label><input type="text" name="logoUrl" value="${schoolData.logo}" class="w-full p-3 rounded-lg border border-gray-300"></div><div class="pt-4"><button type="submit" class="btn-3d w-full bg-primary hover:bg-sky-400 text-white font-bold py-3 rounded-xl border-b-4 border-primary-dark">SIMPAN</button></div></form><div class="mt-8 border-t pt-4"><button onclick="resetData()" class="w-full py-3 border border-red-500 text-red-500 rounded-xl font-bold hover:bg-red-50">Reset Data</button></div></div>`; document.getElementById('appContent').innerHTML = html; }
