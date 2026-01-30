@@ -88,7 +88,9 @@
             if (!skipCloud && schoolData.apiUrl) syncToCloud();
         }
 
+        // --- ENGINE SINKRONISASI (GHOST MODE) ---
         let debounceTimer, lastSyncError = "";
+
         function updateSyncUI(status, message) {
             const el = document.getElementById('syncStatus'); if(!el) return;
             const dot = document.getElementById('syncDot'); const txt = document.getElementById('syncText');
@@ -97,121 +99,102 @@
             else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Tersimpan"; setTimeout(() => { if(txt.innerText === "Tersimpan") txt.innerText = "Cloud Aktif"; }, 3000); }
             else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; lastSyncError = message; }
         }
-        function showSyncError() { if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Tenang, data aman di HP ini (Offline Mode).`, 'info'); }
         
-        // --- ULTIMATE SYNC SENDER V3 ---
-        
-        // Fungsi kirim data menggunakan format FORM (paling kompatibel)
-        function sendDataFormMode(url, payload) {
-            const formData = new URLSearchParams();
-            formData.append('data', JSON.stringify(payload));
+        function showSyncError() { 
+            if(lastSyncError) Swal.fire('Info Koneksi', `Status: ${lastSyncError}<br>Data tetap tersimpan aman di HP.`, 'info'); 
+        }
 
-            // Mode 'no-cors' adalah kunci untuk menembus blokir browser/network
-            // Kelemahannya: Kita tidak tahu apakah sukses atau gagal (Blind Send)
-            // Tapi datanya hampir pasti sampai jika URL benar.
+        // FUNGSI UTAMA PENGIRIM DATA
+        function blindSend(url, payload) {
+            // Gunakan no-cors + text/plain
+            // Ini akan mengirim data ke Google Script tanpa peduli balasan (Fire and Forget)
+            // Ini mengatasi masalah blokir browser
             return fetch(url, {
                 method: 'POST',
                 mode: 'no-cors', 
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: formData
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(payload)
             });
-        }
-        
-        // Fungsi Test Koneksi (Diagnosa)
-        function forceTestWrite(url) {
-            if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
-            if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
-            
-            Swal.fire({ 
-                title: 'Diagnosa Koneksi...', 
-                html: 'Tahap 1: Cek Jalur GET...', 
-                didOpen: async () => { 
-                    Swal.showLoading(); 
-                    
-                    const payload = { schoolData: {name: schoolData.name}, students: [{nis:"TEST", name:"Cek Koneksi"}], logs: [], behaviors: [] }; 
-                    
-                    try {
-                        // TAHAP 1: Cek apakah Script Hidup (GET)
-                        const getCheck = await fetch(url).then(r => r.json()).catch(e => null);
-                        
-                        if(getCheck) {
-                             // Script Hidup, coba kirim POST Normal
-                             Swal.update({ html: 'Tahap 2: Cek Kirim Data Normal...' });
-                             
-                             const formData = new URLSearchParams();
-                             formData.append('data', JSON.stringify(payload));
-                             
-                             fetch(url, { method: 'POST', body: formData })
-                                .then(r => r.text())
-                                .then(t => {
-                                    if(t.includes('success') || t.includes('result')) {
-                                        finishTest(url, true, "Koneksi Normal Berhasil!");
-                                    } else {
-                                        throw new Error("Respon aneh");
-                                    }
-                                })
-                                .catch(err => {
-                                    // TAHAP 3: Fallback ke Jalur Darurat (No-CORS)
-                                    Swal.update({ html: 'Tahap 3: Cek Jalur Darurat (No-CORS)...' });
-                                    sendDataFormMode(url, payload).then(() => {
-                                        finishTest(url, true, "Sukses via Jalur Darurat! Data akan masuk.");
-                                    }).catch(e => {
-                                        finishTest(url, false, "Gagal Total. Cek URL dan Internet.");
-                                    });
-                                });
-
-                        } else {
-                            // GET Gagal, mungkin Script diprivate atau URL salah
-                            finishTest(url, false, "Script tidak merespon. Pastikan Deploy 'Anyone' & 'New Version'.");
-                        }
-                    } catch (e) {
-                         finishTest(url, false, "Error Jaringan: " + e.message);
-                    }
-                } 
-            });
-        }
-
-        function finishTest(url, success, msg) {
-            if(success) {
-                Swal.fire('Berhasil', msg, 'success');
-                schoolData.apiUrl = url; saveData(true); document.querySelector('input[name="apiUrl"]').value = url;
-            } else {
-                Swal.fire('Gagal', msg, 'error');
-            }
         }
         
         function syncToCloud() {
-            if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); updateSyncUI('loading');
+            if(!schoolData.apiUrl) return; 
+            clearTimeout(debounceTimer); 
+            updateSyncUI('loading');
             
+            // HYBRID SYNC: KIRIM TANPA FOTO (AGAR CEPAT & HEMAT)
             const lightStudents = students.map(s => { const { photo, ...sisa } = s; return sisa; });
             const lightSchoolData = { ...schoolData, logo: "" }; 
             const payload = { schoolData: lightSchoolData, students: lightStudents, logs, behaviors };
 
             debounceTimer = setTimeout(() => {
-                // Langsung pakai metode paling sakti: FORM + NO-CORS
-                sendDataFormMode(schoolData.apiUrl, payload)
-                    .then(() => updateSyncUI('success'))
-                    .catch(e => {
-                        updateSyncUI('error', 'Gagal');
-                        lastSyncError = e.message;
-                    });
+                blindSend(schoolData.apiUrl, payload)
+                .then(() => {
+                    // Dalam mode no-cors, promise resolve artinya request terkirim
+                    updateSyncUI('success');
+                })
+                .catch(err => {
+                    updateSyncUI('error', 'Gagal Kirim');
+                });
             }, 2000);
         }
         
         function loadFromCloud() {
-            if(!schoolData.apiUrl) return; updateSyncUI('loading');
-            fetch(schoolData.apiUrl).then(r => r.json()).then(data => {
+            if(!schoolData.apiUrl) return; 
+            updateSyncUI('loading');
+            
+            // Load butuh method GET normal (cors)
+            fetch(schoolData.apiUrl)
+            .then(r => r.json())
+            .then(data => {
                 const cloudStudents = data.students || []; const localStudents = students || [];
-                if (cloudStudents.length >= localStudents.length && cloudStudents.length > 0) {
+                // Logika Merge: Jika Cloud punya data, ambil. 
+                if (cloudStudents.length > 0) {
                     students = cloudStudents.map(cloudS => {
                         const localS = localStudents.find(l => String(l.nis) === String(cloudS.nis));
                         return { ...cloudS, photo: localS ? localS.photo : "" };
                     });
                     if(data.logs) logs = data.logs; if(data.behaviors) behaviors = data.behaviors;
                     if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; schoolData = data.schoolData; schoolData.apiUrl = myApi; }
-                    saveData(true); updateSyncUI('success'); if(document.getElementById('studentListContainer')) renderTeacherDashboard();
-                } else if (localStudents.length > 0) { syncToCloud(); } else { updateSyncUI('success'); }
-            }).catch(e => updateSyncUI('error', 'Offline'));
+                    saveData(true); 
+                    updateSyncUI('success'); 
+                    if(document.getElementById('studentListContainer')) renderTeacherDashboard();
+                } else if (localStudents.length > 0) { 
+                    syncToCloud(); // Cloud kosong, kirim data kita
+                } else { 
+                    updateSyncUI('success'); 
+                }
+            }).catch(e => {
+                // Jika Load gagal (karena script diprivate/login), kita tetap lanjut offline
+                // Tidak perlu heboh error, cukup status offline
+                updateSyncUI('error', 'Mode Offline');
+            });
+        }
+        
+        function forceTestWrite(url) {
+            if (!url) { Swal.fire('Error', 'URL kosong', 'error'); return; }
+            // Auto Clean URL
+            url = url.trim();
+            if (url.includes('/edit')) url = url.split('/edit')[0] + '/exec';
+            
+            Swal.fire({ 
+                title: 'Tes Koneksi...', 
+                html: 'Mencoba Mode Jalur Buta (Blind Send)...', 
+                didOpen: () => { 
+                    Swal.showLoading(); 
+                    const payload = { schoolData: {name: schoolData.name}, students: [{nis:"TEST-CONN", name:"Cek Koneksi"}], logs: [], behaviors: behaviors }; 
+                    
+                    blindSend(url, payload)
+                    .then(() => {
+                         Swal.fire('Terkirim!', 'Data telah ditembakkan ke Server.<br>Silakan cek Spreadsheet dalam 5-10 detik.<br>Jika data masuk, berarti SUKSES.', 'success');
+                         schoolData.apiUrl = url; saveData(true); 
+                         document.querySelector('input[name="apiUrl"]').value = url; 
+                    })
+                    .catch(err => {
+                        Swal.fire('Gagal Total', 'Tidak bisa menghubungi server sama sekali. Cek internet.', 'error');
+                    });
+                } 
+            });
         }
 
         // --- COMPRESSOR ---
@@ -283,7 +266,7 @@
                     <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105">MULAI APLIKASI</button>
                     <div class="absolute bottom-6 text-center w-full">
                         <p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p>
-                        <p class="text-xs text-gray-400">Versi 30.0 (Ultimate Sync)</p>
+                        <p class="text-xs text-gray-400">Versi 30.1 (Ghost Mode)</p>
                     </div>
                 </div>
             `;
