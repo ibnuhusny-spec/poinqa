@@ -14,7 +14,6 @@
     <style>
         body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
         
-        /* 3D Button Styles */
         .btn-3d {
             transition: all 0.1s; position: relative; transform: translateY(0);
             border-bottom-width: 4px; border-style: solid; color: white; 
@@ -49,13 +48,11 @@
 
     <div id="loader"><div class="spinner mb-4"></div><p class="font-bold text-blue-500 animate-pulse" id="loaderText">Memuat...</p></div>
 
-    <!-- Hidden Iframe -->
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
     <form id="syncForm" method="POST" target="hidden_iframe" style="display:none;"><input type="hidden" name="data" id="syncDataInput"></form>
 
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative overflow-hidden flex flex-col">
         
-        <!-- HEADER (Hidden on Splash) -->
         <div id="globalHeader" class="hidden h-16 bg-white shadow-md z-50 flex items-center justify-between px-4 w-full sticky top-0 shrink-0">
             <button onclick="goBack()" class="icon-btn text-gray-600" title="Kembali">
                 <i class="fas fa-arrow-left"></i>
@@ -70,7 +67,6 @@
             </div>
         </div>
 
-        <!-- CONTENT AREA -->
         <div id="appContent" class="flex-grow overflow-y-auto"></div>
     </div>
 
@@ -92,7 +88,6 @@
             students = JSON.parse(localStorage.getItem('students')) || [];
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
-            if(!Array.isArray(behaviors) || behaviors.length === 0) behaviors = initialBehaviors;
         } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; }
 
         function saveData(skipCloud = false) {
@@ -103,7 +98,6 @@
             if (!skipCloud && schoolData.apiUrl) syncToCloud();
         }
 
-        // --- LINK AJAIB ---
         function checkAutoConfig() {
             const urlParams = new URLSearchParams(window.location.search);
             const apiLink = urlParams.get('api');
@@ -114,7 +108,6 @@
             }
         }
 
-        // --- NAVIGATION ---
         let currentScreen = 'splash';
         function goBack() {
             if (currentScreen === 'teacher_detail' || currentScreen === 'add_student' || currentScreen === 'manage_behaviors' || currentScreen === 'setup' || currentScreen === 'edit_student') { renderTeacherDashboard(); }
@@ -124,7 +117,6 @@
         }
         function doRefresh() { if(schoolData.apiUrl) { Swal.fire({title:'Menyegarkan...',timer:1000,didOpen:()=>{Swal.showLoading();loadFromCloud();}}).then(()=>{if(currentScreen==='teacher_dashboard')renderTeacherDashboard();}); } else { location.reload(); } }
 
-        // --- SYNC ENGINE ---
         let debounceTimer, lastSyncError = "";
         function updateSyncUI(status, message) {
             const el = document.getElementById('syncStatus'); if(!el) return;
@@ -157,64 +149,41 @@
                         return { ...cloudS, photo: localS ? localS.photo : "" };
                     });
                     if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
-                    // PENTING: Sync Behaviors agar item poin konsisten antar device
-                    if(data.behaviors && data.behaviors.length > 0) behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
+                    if(data.behaviors) behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
                     if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; const myLogo = schoolData.logo; schoolData = data.schoolData; schoolData.apiUrl = myApi; schoolData.logo = myLogo; }
                     saveData(true); updateSyncUI('success');
-                    if(isManual) Swal.fire('Berhasil', 'Data tersinkron.', 'success').then(() => { if(currentScreen === 'teacher_dashboard') renderTeacherDashboard(); });
+                    if(isManual) Swal.fire('Berhasil', 'Data ditarik.', 'success').then(() => { if(currentScreen === 'teacher_dashboard') renderTeacherDashboard(); });
                 } else if (students.length > 0) { syncToCloud(); updateSyncUI('success'); }
             }).catch(e => { if(isManual) Swal.fire('Gagal', 'Koneksi error.', 'error'); updateSyncUI('error'); });
         }
         function forcePull() { loadFromCloud(true); }
         function checkConnectionAndSave(url) { if(!url) return Swal.fire('Error', 'URL kosong', 'error'); if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; Swal.fire({ title: 'Menyimpan...', didOpen: () => { Swal.showLoading(); schoolData.apiUrl = url; saveData(); setTimeout(() => { Swal.fire('Terkirim', 'Cek Spreadsheet.', 'success'); document.querySelector('input[name="apiUrl"]').value = url; }, 2000); } }); }
 
-        // --- UTILS ---
         function compressImage(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); const maxWidth = 300; const scaleSize = maxWidth / img.width; canvas.width = maxWidth; canvas.height = img.height * scaleSize; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', 0.6)); }; }; }); }
         function toBase64(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => resolve(r.result); }); }
         function formatDate(d) { try { return new Date(d).toLocaleDateString('id-ID'); } catch(e) { return d; } }
         function copyShareLink() { if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link belum ada', 'error'); const l = window.location.href.split('?')[0] + '?api=' + encodeURIComponent(schoolData.apiUrl); navigator.clipboard.writeText(l); Swal.fire('Tersalin', 'Bagikan link ini ke siswa.', 'success'); }
 
-        // --- VIEWS ---
         function renderSplash() {
             currentScreen = 'splash';
             document.getElementById('globalHeader').classList.add('hidden');
             const logoSrc = schoolData.logo || "logo.png";
-            // FIXED: H-SCREEN & CENTERED
-            const html = `
-                <div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden">
-                    <div class="mb-6 relative animate-bounce">
-                        <div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden">
-                            <img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2">
-                        </div>
-                    </div>
-                    <h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1>
-                    <h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2>
-                    <p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p>
-                    
-                    <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">
-                        MULAI APLIKASI
-                    </button>
-                    
-                    <div class="absolute bottom-6 text-center w-full opacity-60">
-                        <p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p>
-                        <p class="text-xs text-gray-400">Versi 45.0 (Final Polished)</p>
-                    </div>
-                </div>
-            `;
+            const html = `<div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden"><div class="mb-6 relative animate-bounce"><div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full opacity-60"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 46.0 (Fixed Student Tabs)</p></div></div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
         function renderModeSelection() {
             currentScreen = 'mode_selection';
             document.getElementById('globalHeader').classList.remove('hidden');
-            const html = `<div class="flex flex-col items-center justify-center min-h-[70vh] p-6 fade-in"><h2 class="text-2xl font-bold text-gray-700 mb-8">Pilih Mode Pengguna</h2><button onclick="checkTeacherPassword()" class="btn-3d btn-green w-full mb-6 p-6 rounded-2xl flex items-center justify-between group cursor-pointer shadow-md"><div class="text-left"><span class="block text-2xl font-bold">Mode GURU</span><span class="text-green-100 text-sm">Kelola Siswa & Poin</span></div><i class="fas fa-chalkboard-user text-4xl opacity-80"></i></button><button onclick="renderStudentLogin()" class="btn-3d btn-orange w-full p-6 rounded-2xl flex items-center justify-between group cursor-pointer shadow-md"><div class="text-left"><span class="block text-2xl font-bold">Mode MURID</span><span class="text-amber-100 text-sm">Lihat Poin & Profil</span></div><i class="fas fa-user-graduate text-4xl opacity-80"></i></button></div>`; document.getElementById('appContent').innerHTML = html;
+            const html = `<div class="flex flex-col items-center justify-center min-h-[70vh] p-6 fade-in"><h2 class="text-2xl font-bold text-gray-700 mb-8">Pilih Mode Pengguna</h2><button onclick="checkTeacherPassword()" class="btn-3d btn-green w-full mb-6 p-6 rounded-2xl flex items-center justify-between group cursor-pointer shadow-md"><div class="text-left"><span class="block text-2xl font-bold">Mode GURU</span><span class="text-green-100 text-sm">Kelola Siswa & Poin</span></div><i class="fas fa-chalkboard-user text-4xl opacity-80"></i></button><button onclick="renderStudentLogin()" class="btn-3d btn-orange w-full p-6 rounded-2xl flex items-center justify-between group cursor-pointer shadow-md"><div class="text-left"><span class="block text-2xl font-bold">Mode MURID</span><span class="text-amber-100 text-sm">Lihat Poin & Profil</span></div><i class="fas fa-user-graduate text-4xl opacity-80"></i></button></div>`;
+            document.getElementById('appContent').innerHTML = html;
         }
 
         function checkTeacherPassword() { Swal.fire({ title: 'Password Guru', input: 'password', inputAttributes: { autocapitalize: 'off' }, showCancelButton: true, confirmButtonText: 'Masuk', confirmButtonColor: '#22c55e', preConfirm: (pass) => { if (pass === 'QA-Poin77') return true; else Swal.showValidationMessage('Salah!'); } }).then((result) => { if (result.isConfirmed) renderTeacherDashboard(); }); }
 
         function renderTeacherDashboard() {
             currentScreen = 'teacher_dashboard';
-            let listHTML = students.length === 0 ? `<div class="text-center py-10 text-gray-400"><i class="fas fa-users-slash text-4xl mb-2"></i><br>Belum ada data siswa.</div>` : '';
+            let listHTML = students.length === 0 ? `<div class="text-center py-10 text-gray-400"><i class="fas fa-users-slash text-4xl mb-2"></i><br>Belum ada data.</div>` : '';
             students.forEach(s => {
                 const totalPoints = logs.filter(l => String(l.studentId) === String(s.nis)).reduce((sum, c) => sum + Number(c.points), 0);
                 const color = totalPoints >= 0 ? 'text-green-600' : 'text-red-500';
@@ -224,22 +193,14 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
-        // --- STUDENT DETAIL ---
         function renderStudentDetail(nis, activeTab = 'good') {
             currentScreen = 'teacher_detail';
             const student = students.find(s => String(s.nis) === String(nis)); if(!student) return;
             const points = logs.filter(l => String(l.studentId) === String(nis)).reduce((sum, c) => sum + Number(c.points), 0);
             
             const sortedBehaviors = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1));
-            
-            // COMPACT LIST LAYOUT
-            const good = sortedBehaviors.filter(b => b.type === 'plus').map(b => 
-                `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="item-card item-good p-2 rounded-lg flex items-center justify-between active:scale-95 shadow-sm w-full mb-2"><div class="flex items-center text-left gap-2"><i class="fas ${b.icon} text-lg text-green-700 opacity-80"></i><span class="text-xs font-bold leading-tight text-green-900">${b.label}</span></div><span class="text-[10px] font-black bg-white text-green-600 border border-green-200 px-2 py-0.5 rounded-full">+${b.points}</span></button>`
-            ).join('');
-
-            const bad = sortedBehaviors.filter(b => b.type === 'minus').map(b => 
-                `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="item-card item-bad p-2 rounded-lg flex items-center justify-between active:scale-95 shadow-sm w-full mb-2"><div class="flex items-center text-left gap-2"><i class="fas ${b.icon} text-lg text-red-700 opacity-80"></i><span class="text-xs font-bold leading-tight text-red-900">${b.label}</span></div><span class="text-[10px] font-black bg-white text-red-600 border border-red-200 px-2 py-0.5 rounded-full">${b.points}</span></button>`
-            ).join('');
+            const good = sortedBehaviors.filter(b => b.type === 'plus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="item-card item-good p-2 rounded-lg flex items-center justify-between active:scale-95 shadow-sm w-full mb-2"><div class="flex items-center text-left gap-2"><i class="fas ${b.icon} text-lg text-green-700 opacity-80"></i><span class="text-xs font-bold leading-tight text-green-900">${b.label}</span></div><span class="text-[10px] font-black bg-white text-green-600 border border-green-200 px-2 py-0.5 rounded-full">+${b.points}</span></button>`).join('');
+            const bad = sortedBehaviors.filter(b => b.type === 'minus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="item-card item-bad p-2 rounded-lg flex items-center justify-between active:scale-95 shadow-sm w-full mb-2"><div class="flex items-center text-left gap-2"><i class="fas ${b.icon} text-lg text-red-700 opacity-80"></i><span class="text-xs font-bold leading-tight text-red-900">${b.label}</span></div><span class="text-[10px] font-black bg-white text-red-600 border border-red-200 px-2 py-0.5 rounded-full">${b.points}</span></button>`).join('');
             
             const html = `
                 <div class="px-4 pb-10 fade-in">
@@ -249,7 +210,11 @@
                         <div class="relative z-10 w-24 h-24 mx-auto bg-white rounded-full p-1 shadow-md -mb-12 mt-4"><img src="${student.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full rounded-full object-cover"></div>
                         <div class="mt-14"><h2 class="text-xl font-bold text-gray-800">${student.name}</h2><p class="text-gray-500 text-sm">${student.kelas} | ${student.nis}</p><div class="mt-4 inline-block px-6 py-2 rounded-full ${points>=0?'bg-green-100 text-green-700':'bg-red-100 text-red-700'} font-black text-2xl border-2 border-opacity-20 border-black">${points} Poin</div></div>
                     </div>
-                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl"><button onclick="setTab('good')" id="btn-good" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button><button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button><button onclick="setTab('note')" id="btn-note" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'}">Catatan</button></div>
+                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl">
+                        <button onclick="setTab('good')" id="btn-good" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button>
+                        <button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button>
+                        <button onclick="setTab('note')" id="btn-note" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'}">Catatan</button>
+                    </div>
                     <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}">${good}</div>
                     <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}">${bad}</div>
                     <div id="tab-note" class="${activeTab==='note'?'block':'hidden'}"><textarea id="noteInput" rows="3" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400" placeholder="Tulis catatan..."></textarea><button onclick="addNoteOnly('${nis}')" class="btn-3d btn-blue w-full mt-3 py-2 rounded-lg font-bold">Kirim Catatan</button><div class="mt-4 text-xs text-gray-500 font-bold">Riwayat:</div><div class="space-y-2 mt-2">${logs.filter(l => String(l.studentId) === String(student.nis) && l.behaviorLabel === "Catatan Guru").slice(-3).reverse().map(l => `<div class="bg-blue-50 p-2 rounded text-xs text-gray-700 border border-blue-100">"${l.note}"</div>`).join('')}</div></div>
@@ -258,10 +223,13 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
+        // FIXED: Universal Tab Switcher for both Teacher and Student
         window.setTab = function(type) {
             document.getElementById('tab-good').classList.add('hidden'); document.getElementById('tab-bad').classList.add('hidden'); document.getElementById('tab-note').classList.add('hidden');
             document.getElementById('btn-good').className = "tab-btn tab-inactive"; document.getElementById('btn-bad').className = "tab-btn tab-inactive"; document.getElementById('btn-note').className = "tab-btn tab-inactive";
+            
             document.getElementById('tab-'+type).classList.remove('hidden');
+            
             if(type === 'good') document.getElementById('btn-good').className = "tab-btn tab-active-good";
             if(type === 'bad') document.getElementById('btn-bad').className = "tab-btn tab-active-bad";
             if(type === 'note') document.getElementById('btn-note').className = "tab-btn tab-active-note";
@@ -270,18 +238,26 @@
         function addPoint(nis, bid, currentTab) { const b = behaviors.find(x => String(x.id) === String(bid)); if(b) { logs.push({ id: Date.now(), studentId: nis, behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() }); saveData(); Swal.fire({ title: 'Berhasil', text: `${b.label} (${b.points})`, icon: 'success', timer: 700, showConfirmButton: false }).then(() => renderStudentDetail(nis, currentTab)); } }
         function addNoteOnly(nis) { const txt = document.getElementById('noteInput').value; if(!txt) return; logs.push({ id: Date.now(), studentId: nis, behaviorLabel: "Catatan Guru", points: 0, type: 'neutral', note: txt, date: new Date().toISOString() }); saveData(); Swal.fire('Terkirim', '', 'success').then(()=> renderStudentDetail(nis, 'note')); }
 
-        // --- STUDENT LOGIN ---
-        function renderStudentLogin() { currentScreen = 'student_login'; const html = `<div class="flex flex-col items-center justify-center min-h-[70vh] px-6 fade-in"><div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 text-3xl shadow-inner"><i class="fas fa-lock"></i></div><h2 class="text-2xl font-bold text-gray-800 mb-2">Login Murid</h2><input id="loginNis" placeholder="Masukkan NIS" class="w-full p-4 border rounded text-center text-xl mb-4 shadow-sm"><button onclick="handleLogin()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white shadow-lg">MASUK</button></div>`; document.getElementById('appContent').innerHTML = html; }
-        function handleLogin() { const nis = document.getElementById('loginNis').value.trim(); const s = students.find(x => String(x.nis).trim() === nis); if(s) { renderStudentDashboard(s); } else { if(schoolData.apiUrl) { Swal.fire({title: 'Mencari Data...', didOpen: () => { Swal.showLoading(); loadFromCloud(true); setTimeout(() => { Swal.close(); const found = students.find(x => String(x.nis).trim() === nis); if(found) renderStudentDashboard(found); else Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); }, 3000); }}); } else { Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); } } }
+        function renderStudentLogin() { 
+            currentScreen = 'student_login';
+            const html = `<div class="flex flex-col items-center justify-center min-h-[70vh] px-6 fade-in"><div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 text-3xl shadow-inner"><i class="fas fa-lock"></i></div><h2 class="text-2xl font-bold text-gray-800 mb-2">Login Murid</h2><input id="loginNis" placeholder="Masukkan NIS" class="w-full p-4 border rounded text-center text-xl mb-4 shadow-sm"><button onclick="handleLogin()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white shadow-lg">MASUK</button></div>`; 
+            document.getElementById('appContent').innerHTML = html; 
+        }
+
+        function handleLogin() { 
+            const nis = document.getElementById('loginNis').value.trim(); 
+            const s = students.find(x => String(x.nis).trim() === nis); 
+            if(s) { renderStudentDashboard(s); } 
+            else { if(schoolData.apiUrl) { Swal.fire({title: 'Mencari Data...', didOpen: () => { Swal.showLoading(); loadFromCloud(true); setTimeout(() => { Swal.close(); const found = students.find(x => String(x.nis).trim() === nis); if(found) renderStudentDashboard(found); else Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); }, 3000); }}); } else { Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); } } 
+        }
 
         function renderStudentDashboard(s) {
             currentScreen = 'student_dashboard';
             const points = logs.filter(l => String(l.studentId) === String(s.nis)).reduce((sum, c) => sum + Number(c.points), 0);
-            
-            const studentLogs = logs.filter(l => String(l.studentId) === String(s.nis)).sort((a,b) => b.id - a.id);
-            const posList = studentLogs.filter(l => l.points > 0).map(l => `<div class="bg-green-50 p-2 mb-2 rounded border border-green-200 flex justify-between items-center"><span class="font-bold text-gray-700 text-sm">${l.behaviorLabel}</span><span class="font-black text-green-600 text-sm">+${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
-            const negList = studentLogs.filter(l => l.points < 0).map(l => `<div class="bg-red-50 p-2 mb-2 rounded border border-red-200 flex justify-between items-center"><span class="font-bold text-gray-700 text-sm">${l.behaviorLabel}</span><span class="font-black text-red-600 text-sm">${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
-            const noteList = studentLogs.filter(l => l.note).map(l => `<div class="bg-blue-50 p-2 mb-2 rounded border border-blue-200 text-sm">"${l.note}"<br><small class="text-gray-400">${formatDate(l.date)}</small></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada pesan</div>';
+            const myLogs = logs.filter(l => String(l.studentId) === String(s.nis)).sort((a,b) => b.id - a.id);
+            const posList = myLogs.filter(l => l.points > 0).map(l => `<div class="bg-green-50 p-2 mb-2 rounded border border-green-200 flex justify-between items-center"><span class="font-bold text-gray-700 text-sm">${l.behaviorLabel}</span><span class="font-black text-green-600 text-sm">+${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
+            const negList = myLogs.filter(l => l.points < 0).map(l => `<div class="bg-red-50 p-2 mb-2 rounded border border-red-200 flex justify-between items-center"><span class="font-bold text-gray-700 text-sm">${l.behaviorLabel}</span><span class="font-black text-red-600 text-sm">${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
+            const noteList = myLogs.filter(l => l.note).map(l => `<div class="bg-blue-50 p-2 mb-2 rounded border border-blue-200 text-sm">"${l.note}"<br><small class="text-gray-400">${formatDate(l.date)}</small></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada pesan</div>';
 
             const html = `
                 <div class="px-4 pb-20 fade-in">
