@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sistem Poin Siswa - SDIT Qurratu A'yun Al-Islami</title>
     
-    <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -13,10 +12,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
-        /* Base Layout */
         body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; padding-top: 80px; padding-bottom: 50px; }
         
-        /* Fixed Header */
         #fixedHeader {
             position: fixed; top: 0; left: 0; right: 0; height: 70px;
             background: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
@@ -24,7 +21,6 @@
             padding: 0 16px; max-width: 28rem; margin: 0 auto;
         }
 
-        /* Bottom Status Bar */
         #bottomStatus {
             position: fixed; bottom: 0; left: 0; right: 0; height: 30px;
             background: #e5e7eb; z-index: 40; display: flex; align-items: center; justify-content: center;
@@ -32,7 +28,14 @@
             border-top: 1px solid #d1d5db; cursor: pointer;
         }
 
-        /* 3D Button Styles */
+        .icon-btn {
+            width: 42px; height: 42px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; transition: all 0.1s;
+            background: #f9fafb; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .icon-btn:active { transform: scale(0.95); background: #e2e8f0; }
+
         .btn-3d {
             transition: all 0.1s; position: relative; transform: translateY(0);
             border-bottom-width: 4px; border-style: solid; color: white; 
@@ -42,7 +45,6 @@
         .btn-3d:active { transform: translateY(4px); border-bottom-width: 0px !important; margin-top: 4px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
         .btn-3d:disabled { opacity: 0.7; transform: translateY(2px); border-bottom-width: 2px; cursor: not-allowed; }
 
-        /* Color Utilities */
         .btn-blue { background-color: #3b82f6 !important; border-color: #1d4ed8 !important; } 
         .btn-green { background-color: #22c55e !important; border-color: #15803d !important; } 
         .btn-red { background-color: #ef4444 !important; border-color: #b91c1c !important; } 
@@ -51,16 +53,6 @@
         .btn-purple { background-color: #8b5cf6 !important; border-color: #6d28d9 !important; } 
         .btn-yellow { background-color: #eab308 !important; border-color: #a16207 !important; }
 
-        /* Icon Button */
-        .icon-btn {
-            width: 42px; height: 42px; border-radius: 12px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.2rem; transition: all 0.1s;
-            background: #f9fafb; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
-        .icon-btn:active { transform: scale(0.95); background: #e2e8f0; }
-
-        /* LIST ITEM STYLES (COMPACT) */
         .list-item-card {
             display: flex; align-items: center; justify-content: space-between;
             padding: 12px 16px; margin-bottom: 8px; width: 100%;
@@ -80,7 +72,6 @@
         .icon-box { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
         .point-badge { padding: 2px 10px; border-radius: 20px; font-weight: 800; font-size: 0.8rem; min-width: 40px; text-align: center; }
 
-        /* Tab Buttons */
         .tab-btn { flex: 1; padding: 10px; font-weight: bold; font-size: 0.8rem; border-radius: 8px; transition: all 0.2s; border: 1px solid transparent; }
         .tab-active-good { background: #dcfce7; color: #166534; border-color: #22c55e; }
         .tab-active-bad { background: #fee2e2; color: #991b1b; border-color: #ef4444; }
@@ -99,13 +90,11 @@
 
     <div id="loader"><div class="spinner mb-4"></div><p class="font-bold text-blue-500 animate-pulse" id="loaderText">Memuat...</p></div>
 
-    <!-- Hidden Iframe & Form for Robust Sync -->
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
     <form id="syncForm" method="POST" target="hidden_iframe" style="display:none;"><input type="hidden" name="data" id="syncDataInput"></form>
 
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative overflow-hidden flex flex-col">
         
-        <!-- HEADER -->
         <div id="fixedHeader">
             <button onclick="goBack()" class="icon-btn text-gray-600 hover:bg-gray-100" title="Kembali">
                 <i class="fas fa-arrow-left"></i>
@@ -124,10 +113,8 @@
             </div>
         </div>
 
-        <!-- CONTENT AREA -->
         <div id="appContent" class="flex-grow overflow-y-auto"></div>
         
-        <!-- STATUS BAR -->
         <div id="bottomStatus" onclick="forcePull()">
             <div id="syncDot" class="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
             <span id="syncText">Lokal</span>
@@ -135,17 +122,12 @@
     </div>
 
     <script>
-        // --- DATA DEFAULT ---
         const defaultSchoolData = { name: "SDIT Qurratu A'yun Al-Islami", location: "Kabupaten Maros", logo: "logo.png", apiUrl: "" };
         const initialBehaviors = [
-            { id: 1, type: 'plus', label: 'Sholat Dhuha', points: 5, icon: 'fa-person-praying' }, 
-            { id: 2, type: 'plus', label: 'Membantu Teman', points: 3, icon: 'fa-hand-holding-heart' },
-            { id: 3, type: 'plus', label: 'Hafalan Qur\'an', points: 10, icon: 'fa-book-quran' }, 
-            { id: 4, type: 'plus', label: 'Datang Tepat Waktu', points: 2, icon: 'fa-clock' },
-            { id: 5, type: 'minus', label: 'Terlambat', points: -5, icon: 'fa-person-running' }, 
-            { id: 6, type: 'minus', label: 'Tidak Mengerjakan PR', points: -10, icon: 'fa-book-open' },
-            { id: 7, type: 'minus', label: 'Berkelahi/Gaduh', points: -15, icon: 'fa-user-injured' }, 
-            { id: 8, type: 'minus', label: 'Buang Sampah Sembarangan', points: -5, icon: 'fa-trash' }
+            { id: 1, type: 'plus', label: 'Sholat Dhuha', points: 5, icon: 'fa-person-praying' }, { id: 2, type: 'plus', label: 'Membantu Teman', points: 3, icon: 'fa-hand-holding-heart' },
+            { id: 3, type: 'plus', label: 'Hafalan Qur\'an', points: 10, icon: 'fa-book-quran' }, { id: 4, type: 'plus', label: 'Datang Tepat Waktu', points: 2, icon: 'fa-clock' },
+            { id: 5, type: 'minus', label: 'Terlambat', points: -5, icon: 'fa-person-running' }, { id: 6, type: 'minus', label: 'Tidak Mengerjakan PR', points: -10, icon: 'fa-book-open' },
+            { id: 7, type: 'minus', label: 'Berkelahi/Gaduh', points: -15, icon: 'fa-user-injured' }, { id: 8, type: 'minus', label: 'Buang Sampah Sembarangan', points: -5, icon: 'fa-trash' }
         ];
 
         let schoolData, students, logs, behaviors;
@@ -176,7 +158,7 @@
             if (apiLink) {
                 schoolData.apiUrl = apiLink; saveData(true);
                 window.history.replaceState({}, document.title, window.location.pathname);
-                Swal.fire({ title: 'Koneksi Otomatis', text: 'Aplikasi berhasil dihubungkan.', icon: 'success', timer: 2000, showConfirmButton: false }).then(() => { loadFromCloud(true); });
+                Swal.fire({ title: 'Terhubung!', icon: 'success', timer: 1500, showConfirmButton: false }).then(() => loadFromCloud(true));
             }
         }
 
@@ -197,7 +179,7 @@
             } else { location.reload(); }
         }
 
-        // --- SYNC ENGINE ---
+        // --- SYNC ENGINE (IFRAME FORM) ---
         let debounceTimer, lastSyncError = "";
         function updateSyncUI(status, message) {
             const el = document.getElementById('syncStatus'); if(!el) return;
@@ -225,40 +207,15 @@
             fetch(schoolData.apiUrl + '?action=read&t=' + Date.now()).then(r => r.json()).then(data => {
                 if(isManual) Swal.close();
                 if(data.students && Array.isArray(data.students)) {
-                    // LOGIKA MERGE: Cloud adalah Data Utama. Lokal hanya menang di Foto.
-                    if (data.students.length > 0 || students.length > 0) {
-                        const cloudStudents = data.students || [];
-                        students = cloudStudents.map(cloudS => { 
-                            const localS = students.find(l => String(l.nis) === String(cloudS.nis)); 
-                            return { ...cloudS, photo: localS ? localS.photo : "" }; 
-                        });
-                        
-                        // Gabungkan log (merge)
-                        if(data.logs && Array.isArray(data.logs)) {
-                           // Buat map log lokal
-                           const localLogMap = new Map(logs.map(l => [l.id, l]));
-                           // Update dengan cloud
-                           data.logs.forEach(l => localLogMap.set(l.id, {...l, points: Number(l.points)}));
-                           logs = Array.from(localLogMap.values());
-                        }
-
+                    if (data.students.length > 0) {
+                        students = data.students.map(cloudS => { const localS = students.find(l => String(l.nis) === String(cloudS.nis)); return { ...cloudS, photo: localS ? localS.photo : "" }; });
+                        if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
                         if(data.behaviors) behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
-                        
-                        if(data.schoolData && data.schoolData.name) { 
-                            const myApi = schoolData.apiUrl; 
-                            const myLogo = schoolData.logo; 
-                            schoolData = data.schoolData; 
-                            schoolData.apiUrl = myApi; 
-                            schoolData.logo = myLogo; 
-                        }
+                        if(data.schoolData && data.schoolData.name) { const myApi = schoolData.apiUrl; const myLogo = schoolData.logo; schoolData = data.schoolData; schoolData.apiUrl = myApi; schoolData.logo = myLogo; }
                         saveData(true); updateSyncUI('success');
-                        
                         if(isManual) Swal.fire('Berhasil', 'Data ditarik.', 'success').then(() => { if(document.getElementById('studentListContainer')) renderTeacherDashboard(); });
                         else if(currentScreen === 'teacher_dashboard') renderTeacherDashboard();
-                    } else if (students.length > 0) { 
-                        syncToCloud(); // Jika cloud kosong, inisialisasi
-                        updateSyncUI('success'); 
-                    }
+                    } else if (students.length > 0) { syncToCloud(); updateSyncUI('success'); }
                 } 
             }).catch(e => { if(isManual) Swal.fire('Gagal', 'Koneksi error.', 'error'); updateSyncUI('error'); });
         }
@@ -266,17 +223,17 @@
         function checkConnectionAndSave(url) { if(!url) return Swal.fire('Error', 'URL kosong', 'error'); if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; Swal.fire({ title: 'Menyimpan...', didOpen: () => { Swal.showLoading(); schoolData.apiUrl = url; saveData(); setTimeout(() => { Swal.fire('Terkirim', 'Cek Spreadsheet.', 'success'); document.querySelector('input[name="apiUrl"]').value = url; }, 2000); } }); }
 
         // --- UTILS ---
-        function compressImage(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); const maxWidth = 300; const scaleSize = maxWidth / img.width; canvas.width = maxWidth; canvas.height = maxWidth; /* Square Crop */ const ctx = canvas.getContext('2d'); const minDim = Math.min(img.width, img.height); const sx = (img.width - minDim) / 2; const sy = (img.height - minDim) / 2; ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, maxWidth, maxWidth); resolve(canvas.toDataURL('image/jpeg', 0.5)); }; }; }); }
+        function compressImage(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); const maxWidth = 300; const scaleSize = maxWidth / img.width; canvas.width = maxWidth; canvas.height = img.height * scaleSize; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', 0.5)); }; }; }); }
         function toBase64(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => resolve(r.result); }); }
         function formatDate(d) { try { return new Date(d).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', hour:'2-digit', minute:'2-digit'}); } catch(e) { return d; } }
-        function copyShareLink() { if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting.', 'error'); const baseUrl = window.location.href.split('?')[0]; const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}`; const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); Swal.fire({ title: 'Link Tersalin!', html: '<p class="text-sm">Bagikan link ini ke Grup WA Siswa.<br>Saat diklik, aplikasi siswa akan otomatis terhubung.</p>', icon: 'success' }); }
+        function copyShareLink() { if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link belum ada', 'error'); const l = window.location.href.split('?')[0] + '?api=' + encodeURIComponent(schoolData.apiUrl); navigator.clipboard.writeText(l); Swal.fire('Tersalin', 'Bagikan link ini ke siswa.', 'success'); }
 
         // --- VIEWS ---
         function renderSplash() {
             currentScreen = 'splash';
             document.getElementById('fixedHeader').style.display = 'none'; document.getElementById('bottomStatus').classList.add('hidden'); document.body.style.paddingTop = "0";
             const logoSrc = schoolData.logo || "logo.png";
-            const html = `<div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden"><div class="mb-6 relative animate-bounce"><div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full opacity-60"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 53.0 (Smart Merge)</p></div></div>`;
+            const html = `<div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden"><div class="mb-6 relative animate-bounce"><div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full opacity-60"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 51.0 (Full Sync)</p></div></div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
@@ -331,7 +288,7 @@
                     </div>
                     <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}">${good}</div>
                     <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}">${bad}</div>
-                    <div id="tab-note" class="${activeTab==='note'?'block':'hidden'}"><textarea id="noteInput" rows="3" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400" placeholder="Tulis catatan..."></textarea><button onclick="addNoteOnly('${nis}')" class="btn-3d btn-blue w-full mt-3 py-2 rounded-lg font-bold">Kirim Catatan</button><div class="mt-4 text-xs text-gray-500 font-bold">Riwayat:</div><div class="space-y-2 mt-2">${logs.filter(l => String(l.studentId) === String(student.nis) && l.behaviorLabel === "Catatan Guru").slice(-3).reverse().map(l => `<div class="bg-blue-50 p-2 rounded text-xs text-gray-700 border border-blue-100">"${l.note}"</div>`).join('')}</div></div>
+                    <div id="tab-note" class="${activeTab==='note'?'block':'hidden'}"><textarea id="noteInput" rows="3" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400" placeholder="Tulis catatan..."></textarea><button onclick="addNoteOnly('${nis}')" class="btn-3d btn-blue w-full mt-3 py-2 rounded-lg font-bold">Kirim Catatan</button><div class="mt-4 text-xs text-gray-500 font-bold">Riwayat Catatan:</div><div class="space-y-2 mt-2">${logs.filter(l => String(l.studentId) === String(student.nis) && l.behaviorLabel === "Catatan Guru").slice(-3).reverse().map(l => `<div class="bg-blue-50 p-2 rounded text-xs text-gray-700 border border-blue-100">"${l.note}"</div>`).join('')}</div></div>
                     <button onclick="renderTeacherDashboard()" class="w-full mt-8 py-3 bg-gray-200 text-gray-600 font-bold rounded-lg hover:bg-gray-300">Kembali ke Daftar</button>
                 </div>`;
             document.getElementById('appContent').innerHTML = html;
@@ -370,13 +327,27 @@
             currentScreen = 'student_dashboard';
             const points = logs.filter(l => String(l.studentId) === String(s.nis)).reduce((sum, c) => sum + Number(c.points), 0);
             const myLogs = logs.filter(l => String(l.studentId) === String(s.nis)).sort((a,b) => b.id - a.id);
-            const posList = myLogs.filter(l => l.points > 0).map(l => `<div class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-check-circle"></i></div><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><span class="point-badge">+${l.points}</span><div class="text-[10px] text-gray-400 absolute right-2 bottom-1">${formatDate(l.date)}</div></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
-            const negList = myLogs.filter(l => l.points < 0).map(l => `<div class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-exclamation-circle"></i></div><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><span class="point-badge">${l.points}</span><div class="text-[10px] text-gray-400 absolute right-2 bottom-1">${formatDate(l.date)}</div></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
+            const posList = myLogs.filter(l => l.points > 0).map(l => `<div class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-check-circle"></i></div><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><span class="point-badge">+${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
+            const negList = myLogs.filter(l => l.points < 0).map(l => `<div class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-exclamation-circle"></i></div><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><span class="point-badge">${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
             const noteList = myLogs.filter(l => l.note).map(l => `<div class="bg-blue-50 p-2 mb-2 rounded border border-blue-200 text-sm">"${l.note}"<br><small class="text-gray-400">${formatDate(l.date)}</small></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada pesan</div>';
 
             const html = `
                 <div class="px-4 pb-20 fade-in">
-                    <div class="bg-white p-6 rounded-xl shadow-lg text-center mb-6 mt-4"><div class="w-24 h-24 mx-auto bg-gray-200 rounded-full mb-3 overflow-hidden border-4 border-blue-100"><img src="${s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full object-cover"></div><h2 class="text-2xl font-bold text-gray-800">${s.name}</h2><p class="text-sm font-bold text-blue-500">${s.nis} | ${s.kelas}</p><p class="text-xs text-gray-500 mt-1"><i class="fas fa-map-marker-alt"></i> ${s.address || '-'}</p><div class="text-5xl font-black mt-4 ${points>=0?'text-green-600':'text-red-500'}">${points} <span class="text-sm font-normal text-gray-400">Poin</span></div></div><div class="flex mb-4 bg-gray-100 p-1 rounded-xl"><button onclick="showTab('sgood', this)" class="flex-1 py-2 text-xs font-bold rounded-lg btn-green text-white shadow-sm transition">Positif</button><button onclick="showTab('sbad', this)" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 transition">Negatif</button><button onclick="showTab('snote', this)" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-500 transition">Pesan</button></div><div id="tab-sgood" class="min-h-[300px]">${posList}</div><div id="tab-bad" class="hidden min-h-[300px]">${negList}</div><div id="tab-note" class="hidden min-h-[300px]">${noteList}</div><button onclick="renderStudentLogin()" class="w-full mt-6 py-3 text-red-400 font-bold border border-red-200 rounded-lg">Keluar</button></div>`; document.getElementById('appContent').innerHTML = html; }
+                    <div class="bg-white p-6 rounded-xl shadow-lg text-center mb-6 mt-4">
+                        <div class="w-24 h-24 mx-auto bg-gray-200 rounded-full mb-3 overflow-hidden border-4 border-blue-100">
+                            <img src="${s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full object-cover">
+                        </div>
+                        <h2 class="text-2xl font-bold text-gray-800">${s.name}</h2>
+                        <p class="text-sm font-bold text-blue-500">${s.nis} | ${s.kelas}</p>
+                        <p class="text-xs text-gray-500 mt-1"><i class="fas fa-map-marker-alt"></i> ${s.address || '-'}</p>
+                        <div class="text-5xl font-black mt-4 ${points>=0?'text-green-600':'text-red-500'}">${points} <span class="text-sm font-normal text-gray-400">Poin</span></div>
+                    </div>
+                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl"><button onclick="setTab('good')" id="btn-good" class="tab-btn tab-active-good">Positif</button><button onclick="setTab('bad')" id="btn-bad" class="tab-btn tab-inactive">Negatif</button><button onclick="setTab('note')" id="btn-note" class="tab-btn tab-inactive">Pesan</button></div>
+                    <div id="tab-good" class="min-h-[300px]">${posList}</div><div id="tab-bad" class="hidden min-h-[300px]">${negList}</div><div id="tab-note" class="hidden min-h-[300px]">${noteList}</div>
+                    <button onclick="renderStudentLogin()" class="w-full mt-6 py-3 text-red-400 font-bold border border-red-200 rounded-lg">Keluar</button>
+                </div>`;
+            document.getElementById('appContent').innerHTML = html;
+        }
 
         // --- UTILS ---
         function renderAddStudent() { currentScreen = 'add_student'; const html = `<div class="pt-10 px-6 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><form onsubmit="handleAddSubmit(event)" class="space-y-3"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div><input type="date" name="dob" class="w-full p-3 border rounded"><textarea name="address" placeholder="Alamat Lengkap" class="w-full p-3 border rounded" rows="2"></textarea><div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div><input type="file" id="photoInput" class="w-full p-2 bg-white rounded border"><button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button></form></div>`; document.getElementById('appContent').innerHTML = html; }
