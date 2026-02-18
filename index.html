@@ -156,8 +156,7 @@
 
         try {
             schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
-            // Ensure data structure
-            if (!schoolData.name) schoolData.name = defaultSchoolData.name;
+            if (!schoolData.name) { let savedApi = schoolData.apiUrl || ""; schoolData = { ...defaultSchoolData, apiUrl: savedApi }; }
             students = JSON.parse(localStorage.getItem('students')) || [];
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
@@ -192,21 +191,18 @@
 
             if (isUpdated) {
                 saveData(true);
-                // Hide params from URL for cleanliness
                 window.history.replaceState({}, document.title, window.location.pathname);
+                renderSplash(); 
                 
                 Swal.fire({
                     title: 'Terhubung!',
                     text: `Tersambung ke ${schoolData.name}`,
                     icon: 'success',
-                    timer: 1500,
+                    timer: 2000,
                     showConfirmButton: false
                 }).then(() => {
                     loadFromCloud(true);
-                    // AUTO JUMP TO STUDENT MODE IF REQUESTED
-                    if(mode === 'student') {
-                        renderStudentLogin();
-                    }
+                    if(mode === 'student') renderStudentLogin();
                 });
             }
         }
@@ -321,33 +317,23 @@
             } catch(e) { return d; }
         }
 
-        // --- SMART COPY LINK ---
-        function copyShareLink() { 
-            // Ambil URL dari Input jika belum disimpan
-            let urlToShare = schoolData.apiUrl;
-            const inputEl = document.getElementById('apiUrlInput');
-            if(inputEl && inputEl.value) urlToShare = inputEl.value;
-
-            if(!urlToShare) return Swal.fire('Gagal', 'Link Script belum diisi.', 'error'); 
-
-            // Bersihkan URL
-            if(urlToShare.includes('/edit')) urlToShare = urlToShare.split('/edit')[0] + '/exec';
-
-            const baseUrl = window.location.href.split('?')[0]; 
-            // Tambahkan parameter sekolah dan mode student
-            const finalLink = `${baseUrl}?api=${encodeURIComponent(urlToShare)}&school=${encodeURIComponent(schoolData.name)}&mode=student`; 
-            
-            const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); 
-            
-            Swal.fire({ 
-                title: 'Link Tersalin!', 
-                html: '<p class="text-sm">Link ini otomatis akan membuka <b>Nama Sekolah</b> dan langsung masuk ke <b>Login Murid</b>.</p>', 
-                icon: 'success' 
-            }); 
-        }
+        function copyShareLink() { if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting.', 'error'); const baseUrl = window.location.href.split('?')[0]; const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}`; const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); Swal.fire({ title: 'Link Tersalin!', html: '<p class="text-sm">Bagikan link ini ke Grup WA Siswa.<br>Saat diklik, aplikasi siswa akan otomatis terhubung.</p>', icon: 'success' }); }
         
         // --- EXCEL IMPORT ---
         function triggerImport() { document.getElementById('excelInput').click(); }
+        
+        // DOWNLOAD TEMPLATE
+        function downloadTemplate() {
+            const ws = XLSX.utils.aoa_to_sheet([
+                ["Nama Lengkap", "NIS", "Kelas", "Tanggal Lahir (YYYY-MM-DD)", "Alamat (Kosongkan)"],
+                ["Ahmad Fulan", "12345", "1A", "2015-05-20", ""],
+                ["Siti Aminah", "12346", "1B", "2015-08-17", ""]
+            ]);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Template");
+            XLSX.writeFile(wb, "Template_Siswa.xlsx");
+        }
+
         function processExcel(e) {
             const file = e.target.files[0]; if(!file) return;
             const reader = new FileReader();
@@ -358,11 +344,13 @@
                 const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
                 
                 let added = 0;
+                // Format: A(0)=Nama, B(1)=NIS, C(2)=Kelas, D(3)=TglLahir
                 for(let i=1; i<jsonData.length; i++) {
                     const row = jsonData[i];
                     if(row[0] && row[1]) {
                         const nis = String(row[1]).trim();
                         if(!students.find(s => String(s.nis) === nis)) {
+                            // FIX: Convert Excel Date
                             let dob = row[3];
                             if (typeof dob === 'number') {
                                 const dateInfo = new Date(Math.round((dob - 25569) * 86400 * 1000));
@@ -370,6 +358,7 @@
                             } else {
                                 dob = "";
                             }
+
                             students.push({
                                 name: row[0], nis: nis, kelas: row[2] || "-", 
                                 dob: dob, address: "", photo: "", studentPhoto: ""
@@ -389,7 +378,7 @@
             currentScreen = 'splash';
             document.getElementById('fixedHeader').style.display = 'none'; document.getElementById('bottomStatus').classList.add('hidden'); document.body.style.paddingTop = "0";
             const logoSrc = schoolData.logo || "logo.png";
-            const html = `<div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden"><div class="mb-6 relative animate-bounce"><div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full opacity-60"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 59.0 (Smart Link)</p></div></div>`;
+            const html = `<div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden"><div class="mb-6 relative animate-bounce"><div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full opacity-60"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 57.1 (Compact & Template)</p></div></div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
@@ -412,7 +401,7 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
-        // --- STUDENT DETAIL & TABS ---
+        // --- STUDENT DETAIL & TABS (FIXED LAYOUT) ---
         function renderStudentDetail(nis, activeTab = 'good') {
             currentScreen = 'teacher_detail';
             const student = students.find(s => String(s.nis) === String(nis)); if(!student) return;
@@ -420,11 +409,19 @@
             
             const sortedBehaviors = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1));
             
-            const good = sortedBehaviors.filter(b => b.type === 'plus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">+${b.points}</span></button>`).join('');
-            const bad = sortedBehaviors.filter(b => b.type === 'minus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">${b.points}</span></button>`).join('');
+            // LIST LAYOUT - HORIZONTAL
+            const good = sortedBehaviors.filter(b => b.type === 'plus').map(b => 
+                `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">+${b.points}</span></button>`
+            ).join('');
+
+            const bad = sortedBehaviors.filter(b => b.type === 'minus').map(b => 
+                `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">${b.points}</span></button>`
+            ).join('');
             
+            // FILTER HISTORY & TIMESTAMP
             const studentLogs = logs.filter(l => String(l.studentId) === String(nis)).sort((a,b)=>b.id-a.id);
             let filteredHistory = [];
+
             if (activeTab === 'good') filteredHistory = studentLogs.filter(l => l.points > 0);
             else if (activeTab === 'bad') filteredHistory = studentLogs.filter(l => l.points < 0);
             else filteredHistory = studentLogs.filter(l => l.points === 0 || l.note);
@@ -441,7 +438,7 @@
                         <button onclick="deleteLog(${l.id}, '${nis}', '${activeTab}')" class="text-gray-300 hover:text-red-500 p-1"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
-            `).join('') || '<div class="text-center text-xs text-gray-400 mt-2">Belum ada riwayat.</div>';
+            `).join('') || '<div class="text-center text-xs text-gray-400 mt-2">Belum ada riwayat di kategori ini.</div>';
             
             const html = `
                 <div class="px-4 pb-10 fade-in">
@@ -449,21 +446,47 @@
                         <div class="absolute top-0 left-0 w-full h-20 bg-blue-500"></div>
                         <div class="absolute top-2 right-2 flex gap-2 z-20"><button onclick="renderEditStudent('${nis}')" class="btn-3d btn-yellow p-2 rounded-lg text-xs font-bold"><i class="fas fa-edit"></i></button><button onclick="deleteStudent('${nis}')" class="btn-3d btn-red p-2 rounded-lg text-xs font-bold"><i class="fas fa-trash"></i></button></div>
                         <div class="relative z-10 w-24 h-24 mx-auto bg-white rounded-full p-1 shadow-md -mb-12 mt-4"><img src="${student.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full rounded-full object-cover"></div>
-                        <div class="mt-14"><h2 class="text-xl font-bold text-gray-800">${student.name}</h2><p class="text-gray-500 text-sm">${student.kelas} | ${student.nis}</p><p class="text-gray-400 text-xs mt-1"><i class="fas fa-birthday-cake mr-1"></i> ${formatDisplayDate(student.dob)}</p><div class="mt-4 inline-block px-6 py-2 rounded-full ${points>=0?'bg-green-100 text-green-700':'bg-red-100 text-red-700'} font-black text-2xl border-2 border-opacity-20 border-black">${points} Poin</div></div>
+                        <div class="mt-14">
+                            <h2 class="text-xl font-bold text-gray-800">${student.name}</h2>
+                            <p class="text-gray-500 text-sm">${student.kelas} | ${student.nis}</p>
+                            <p class="text-gray-400 text-xs mt-1"><i class="fas fa-birthday-cake mr-1"></i> ${formatDisplayDate(student.dob)}</p>
+                            <div class="mt-4 inline-block px-6 py-2 rounded-full ${points>=0?'bg-green-100 text-green-700':'bg-red-100 text-red-700'} font-black text-2xl border-2 border-opacity-20 border-black">${points} Poin</div>
+                        </div>
                     </div>
-                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl"><button onclick="setTab('good')" id="btn-good" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button><button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button><button onclick="setTab('note')" id="btn-note" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'}">Catatan</button></div>
+                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl">
+                        <button onclick="setTab('good')" id="btn-good" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button>
+                        <button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button>
+                        <button onclick="setTab('note')" id="btn-note" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'}">Catatan</button>
+                    </div>
                     
-                    <div class="mb-6"><h3 class="font-bold text-gray-700 mb-2 text-sm ml-1 border-b pb-1">Riwayat ${activeTab==='good'?'Positif':(activeTab==='bad'?'Negatif':'Catatan')}</h3><div class="bg-gray-50 rounded-xl p-2 max-h-60 overflow-y-auto border border-gray-200 shadow-inner">${historyList}</div></div>
-                    
-                    <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}"><div class="grid grid-cols-2 gap-3">${good}</div></div>
-                    <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}"><div class="grid grid-cols-2 gap-3">${bad}</div></div>
-                    <div id="tab-note" class="${activeTab==='note'?'block':'hidden'}"><textarea id="noteInput" rows="3" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400" placeholder="Tulis catatan..."></textarea><button onclick="addNoteOnly('${nis}')" class="btn-3d btn-blue w-full mt-3 py-2 rounded-lg font-bold">Kirim Catatan</button></div>
+                    <!-- HISTORY ON TOP -->
+                    <div class="mb-6">
+                        <h3 class="font-bold text-gray-700 mb-2 text-sm ml-1 border-b pb-1">Riwayat ${activeTab==='good'?'Positif':(activeTab==='bad'?'Negatif':'Catatan')}</h3>
+                        <div class="bg-gray-50 rounded-xl p-2 max-h-60 overflow-y-auto border border-gray-200 shadow-inner">
+                            ${historyList}
+                        </div>
+                    </div>
+
+                    <!-- INPUT BUTTONS BOTTOM -->
+                    <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}">
+                        ${good}
+                    </div>
+                    <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}">
+                        ${bad}
+                    </div>
+                    <div id="tab-note" class="${activeTab==='note'?'block':'hidden'}">
+                        <textarea id="noteInput" rows="3" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400" placeholder="Tulis catatan..."></textarea>
+                        <button onclick="addNoteOnly('${nis}')" class="btn-3d btn-blue w-full mt-3 py-2 rounded-lg font-bold">Kirim Catatan</button>
+                    </div>
+
                     <button onclick="renderTeacherDashboard()" class="w-full mt-8 py-3 bg-gray-200 text-gray-600 font-bold rounded-lg hover:bg-gray-300">Kembali ke Daftar</button>
                 </div>`;
             document.getElementById('appContent').innerHTML = html;
         }
         
-        function deleteLog(id, nis, tab) { Swal.fire({ title: 'Hapus Poin?', text: "Data hilang permanen!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Hapus' }).then((result) => { if (result.isConfirmed) { logs = logs.filter(l => String(l.id) !== String(id)); saveData(); renderStudentDetail(nis, tab); Swal.fire('Terhapus', '', 'success'); } }); }
+        function deleteLog(id, nis, tab) {
+            Swal.fire({ title: 'Hapus Poin?', text: "Data hilang permanen!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Hapus' }).then((result) => { if (result.isConfirmed) { logs = logs.filter(l => String(l.id) !== String(id)); saveData(); renderStudentDetail(nis, tab); Swal.fire('Terhapus', '', 'success'); } });
+        }
 
         window.setTab = function(type) {
             const editBtn = document.querySelector('button[onclick^="renderEditStudent"]');
@@ -484,10 +507,8 @@
             const myLogs = logs.filter(l => String(l.studentId) === String(s.nis)).sort((a,b) => b.id - a.id);
             const displayPhoto = s.studentPhoto && s.studentPhoto.length > 50 ? s.studentPhoto : (s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png');
 
-            const createList = (list, color) => list.map(l => `<div class="list-item-card border-${color}-200 mb-2"><div class="flex items-center gap-3"><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><div class="text-right"><span class="font-bold text-${color}-600">${l.points>0?'+':''}${l.points}</span><br><span class="text-[10px] text-gray-400">${formatLogDate(l.date)}</span></div></div>`).join('');
-            
-            const posList = createList(myLogs.filter(l => l.points > 0), 'green') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
-            const negList = createList(myLogs.filter(l => l.points < 0), 'red') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
+            const posList = myLogs.filter(l => l.points > 0).map(l => `<div class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-check-circle"></i></div><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge">+${l.points}</span><div class="text-[10px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
+            const negList = myLogs.filter(l => l.points < 0).map(l => `<div class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-exclamation-circle"></i></div><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge">${l.points}</span><div class="text-[10px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
             const noteList = myLogs.filter(l => l.note).map(l => `<div class="bg-blue-50 p-2 mb-2 rounded border border-blue-200 text-sm">"${l.note}"<br><small class="text-gray-400">${formatLogDate(l.date)}</small></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada pesan</div>';
 
             const html = `
@@ -514,8 +535,8 @@
         function updateStudentPhoto(nis) { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = async (e) => { const file = e.target.files[0]; if(file) { Swal.fire({title: 'Mengupload...', didOpen: () => Swal.showLoading()}); const photoBase64 = await compressImage(file); const idx = students.findIndex(s => String(s.nis) === String(nis)); if(idx !== -1) { students[idx].studentPhoto = photoBase64; saveData(); Swal.close(); renderStudentDashboard(students[idx]); } } }; input.click(); }
 
         // --- UTILS ---
-        function renderAddStudent() { currentScreen = 'add_student'; const html = `<div class="pt-10 px-6 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><div class="mb-4 text-right"><button onclick="triggerImport()" class="bg-green-600 text-white px-3 py-1 rounded text-xs font-bold"><i class="fas fa-file-excel mr-1"></i> Import Excel</button><input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none" onchange="processExcel(event)"></div><form onsubmit="handleAddSubmit(event)" class="space-y-3"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div><input type="date" name="dob" class="w-full p-3 border rounded"><div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div><input type="file" id="photoInput" class="w-full p-2 bg-white rounded border"><button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button></form><button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button></div>`; document.getElementById('appContent').innerHTML = html; }
-        function handleAddSubmit(e) { e.preventDefault(); const btn = document.getElementById('btnSimpanSiswa'); btn.disabled = true; btn.innerText = "Menyimpan..."; const f = e.target; const newNIS = String(f.nis.value).trim(); if(students.find(s => String(s.nis).trim() === newNIS)) { btn.disabled = false; btn.innerText = "Simpan"; return Swal.fire('Gagal', 'NIS sudah ada', 'error'); } const photoInput = document.getElementById('photoInput'); const saveProcess = (photo) => { students.push({ name: f.name.value, nis: f.nis.value, kelas: f.kelas.value, dob: f.dob.value, photo: photo, studentPhoto: "" }); saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); }; if(photoInput.files[0]) { compressImage(photoInput.files[0]).then(res => saveProcess(res)).catch(() => saveProcess("")); } else { saveProcess(""); } }
+        function renderAddStudent() { currentScreen = 'add_student'; const html = `<div class="pt-10 px-6 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><div class="mb-4 text-right"><button onclick="triggerImport()" class="bg-green-600 text-white px-3 py-1 rounded text-xs font-bold"><i class="fas fa-file-excel mr-1"></i> Import Excel</button><button onclick="downloadTemplate()" class="bg-gray-500 text-white px-3 py-1 rounded text-xs font-bold ml-2"><i class="fas fa-download mr-1"></i> Template</button><input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none" onchange="processExcel(event)"></div><form onsubmit="handleAddSubmit(event)" class="space-y-3"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div><input type="date" name="dob" class="w-full p-3 border rounded"><div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div><input type="file" id="photoInput" class="w-full p-2 bg-white rounded border"><button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button></form><button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button></div>`; document.getElementById('appContent').innerHTML = html; }
+        function handleAddSubmit(e) { e.preventDefault(); const btn = document.getElementById('btnSimpanSiswa'); btn.disabled = true; btn.innerText = "Menyimpan..."; const f = e.target; const newNIS = String(f.nis.value).trim(); if(students.find(s => String(s.nis).trim() === newNIS)) { btn.disabled = false; btn.innerText = "Simpan"; return Swal.fire('Gagal', 'NIS sudah ada', 'error'); } const photoInput = document.getElementById('photoInput'); const saveProcess = (photo) => { students.push({ name: f.name.value, nis: f.nis.value, kelas: f.kelas.value, dob: f.dob.value, address: "", photo: photo, studentPhoto: "" }); saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); }; if(photoInput.files[0]) { compressImage(photoInput.files[0]).then(res => saveProcess(res)).catch(() => saveProcess("")); } else { saveProcess(""); } }
         function renderManageBehaviors() { currentScreen = 'manage_behaviors'; const sorted = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1)); let list = ''; sorted.forEach((b) => { const clr = b.type === 'plus' ? 'item-good' : 'item-bad'; const idx = behaviors.findIndex(x => x.id === b.id); list += `<div class="list-item-card ${clr} mb-2"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><div class="flex items-center gap-2"><span class="point-badge">${b.points}</span><button onclick="delBehavior(${idx})" class="text-gray-400 hover:text-red-500"><i class="fas fa-trash"></i></button></div></div>`; }); const html = `<div class="pt-20 px-6 pb-10"><h2 class="text-xl font-bold mb-4">Atur Poin</h2><div class="space-y-1 mb-4">${list}</div><button onclick="addNewBehaviorPrompt()" class="btn-3d btn-blue w-full py-3 rounded-lg mb-4">Tambah Item Baru</button><button onclick="renderTeacherDashboard()" class="w-full py-3 border rounded text-gray-500">Kembali</button></div>`; document.getElementById('appContent').innerHTML = html; }
         function addNewBehaviorPrompt() { Swal.fire({ title: 'Tambah', html: `<input id="l" class="swal2-input" placeholder="Nama"><input id="p" type="number" class="swal2-input" placeholder="Poin"><select id="t" class="swal2-input"><option value="plus">Positif</option><option value="minus">Negatif</option></select>`, preConfirm: () => { const l = document.getElementById('l').value; let p = parseInt(document.getElementById('p').value); const t = document.getElementById('t').value; if(!l || !p) return; p = Math.abs(p); if(t === 'minus') p = -p; behaviors.push({id: Date.now(), label: l, points: p, type: t, icon: 'fa-star'}); saveData(); renderManageBehaviors(); } }); }
         function delBehavior(idx) { behaviors.splice(idx, 1); saveData(); renderManageBehaviors(); }
@@ -534,6 +555,43 @@
         function triggerRestore() { document.getElementById('restoreInput').click(); }
         function handleRestore(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function(e) { try { const data = JSON.parse(e.target.result); if(data.students && data.logs) { students = data.students; logs = data.logs; behaviors = data.behaviors || behaviors; if(data.schoolData) schoolData = data.schoolData; saveData(true); Swal.fire('Berhasil', 'Data dipulihkan.', 'success').then(() => location.reload()); } else { Swal.fire('Gagal', 'Format salah.', 'error'); } } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); } }; reader.readAsText(file); }
         function copyShareLink() { if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting.', 'error'); const baseUrl = window.location.href.split('?')[0]; const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}`; const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); Swal.fire({ title: 'Link Tersalin!', html: '<p class="text-sm">Bagikan link ini ke Grup WA Siswa.<br>Saat diklik, aplikasi siswa akan otomatis terhubung.</p>', icon: 'success' }); }
+        
+        // --- EXCEL IMPORT ---
+        function triggerImport() { document.getElementById('excelInput').click(); }
+        function downloadTemplate() { const ws = XLSX.utils.aoa_to_sheet([["Nama Lengkap", "NIS", "Kelas", "Tanggal Lahir (YYYY-MM-DD)", "Alamat (Kosongkan)"], ["Ahmad Fulan", "12345", "1A", "2015-05-20", ""], ["Siti Aminah", "12346", "1B", "2015-08-17", ""]]); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Template"); XLSX.writeFile(wb, "Template_Siswa.xlsx"); }
+        function processExcel(e) {
+            const file = e.target.files[0]; if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+                
+                let added = 0;
+                for(let i=1; i<jsonData.length; i++) {
+                    const row = jsonData[i];
+                    if(row[0] && row[1]) {
+                        const nis = String(row[1]).trim();
+                        if(!students.find(s => String(s.nis) === nis)) {
+                            let dob = row[3];
+                            if (typeof dob === 'number') {
+                                const dateInfo = new Date(Math.round((dob - 25569) * 86400 * 1000));
+                                dob = dateInfo.toISOString().split('T')[0];
+                            } else { dob = ""; }
+                            students.push({
+                                name: row[0], nis: nis, kelas: row[2] || "-", 
+                                dob: dob, address: "", photo: "", studentPhoto: ""
+                            });
+                            added++;
+                        }
+                    }
+                }
+                saveData();
+                Swal.fire('Selesai', `Berhasil mengimpor ${added} siswa.`, 'success').then(() => renderTeacherDashboard());
+            };
+            reader.readAsArrayBuffer(file);
+        }
 
         window.onload = function() { checkAutoConfig(); renderSplash(); if(schoolData.apiUrl) loadFromCloud(); };
     </script>
