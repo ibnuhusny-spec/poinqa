@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sistem Poin Siswa - SDIT Qurratu A'yun Al-Islami</title>
+    <title>Sistem Poin Siswa</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -41,7 +41,7 @@
         .btn-3d:active { transform: translateY(4px); border-bottom-width: 0px !important; margin-top: 4px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
         .btn-3d:disabled { opacity: 0.7; transform: translateY(2px); border-bottom-width: 2px; cursor: not-allowed; }
 
-        /* Colors */
+        /* Color Utilities */
         .btn-blue { background-color: #3b82f6 !important; border-color: #1d4ed8 !important; } 
         .btn-green { background-color: #22c55e !important; border-color: #15803d !important; } 
         .btn-red { background-color: #ef4444 !important; border-color: #b91c1c !important; } 
@@ -50,7 +50,16 @@
         .btn-purple { background-color: #8b5cf6 !important; border-color: #6d28d9 !important; } 
         .btn-yellow { background-color: #eab308 !important; border-color: #a16207 !important; }
 
-        /* LIST ITEM STYLES */
+        /* Icon Button */
+        .icon-btn {
+            width: 42px; height: 42px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; transition: all 0.1s;
+            background: #f9fafb; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .icon-btn:active { transform: scale(0.95); background: #e2e8f0; }
+
+        /* LIST ITEM STYLES (COMPACT) */
         .list-item-card {
             display: flex; align-items: center; justify-content: space-between;
             padding: 12px 16px; margin-bottom: 8px; width: 100%;
@@ -70,7 +79,7 @@
         .icon-box { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
         .point-badge { padding: 2px 10px; border-radius: 20px; font-weight: 800; font-size: 0.8rem; min-width: 40px; text-align: center; }
 
-        /* History List */
+        /* History List Item */
         .history-item { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
 
         /* Tabs */
@@ -147,7 +156,11 @@
 
         try {
             schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
-            if (!schoolData.name) { let savedApi = schoolData.apiUrl || ""; schoolData = { ...defaultSchoolData, apiUrl: savedApi }; }
+            // Ensure default values if JSON is valid but empty properties
+            if (!schoolData.name) schoolData.name = defaultSchoolData.name;
+            if (!schoolData.location) schoolData.location = defaultSchoolData.location;
+            if (!schoolData.logo) schoolData.logo = defaultSchoolData.logo;
+            
             students = JSON.parse(localStorage.getItem('students')) || [];
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
@@ -169,7 +182,7 @@
             if (apiLink) {
                 schoolData.apiUrl = apiLink; saveData(true);
                 window.history.replaceState({}, document.title, window.location.pathname);
-                Swal.fire({ title: 'Terhubung!', icon: 'success', timer: 1500, showConfirmButton: false }).then(() => loadFromCloud(true));
+                Swal.fire({ title: 'Koneksi Otomatis', text: 'Aplikasi berhasil dihubungkan.', icon: 'success', timer: 2000, showConfirmButton: false }).then(() => loadFromCloud(true));
             }
         }
 
@@ -225,6 +238,7 @@
             fetch(schoolData.apiUrl + '?action=read&t=' + Date.now()).then(r => r.json()).then(data => {
                 if(isManual) Swal.close();
                 if(data.students && Array.isArray(data.students)) {
+                    // Jika data ada, update
                     if (data.students.length > 0 || students.length > 0) {
                         const cloudStudents = data.students;
                         students = cloudStudents.map(cloudS => {
@@ -238,14 +252,23 @@
                         
                         if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
                         if(data.behaviors) behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
+                        
+                        // SYNC NAMA SEKOLAH
                         if(data.schoolData && data.schoolData.name) { 
-                            const myApi = schoolData.apiUrl; const myLogo = schoolData.logo; 
-                            schoolData = data.schoolData; schoolData.apiUrl = myApi; schoolData.logo = myLogo; 
+                            const myApi = schoolData.apiUrl; 
+                            const myLogo = schoolData.logo; // Keep local logo
+                            schoolData = data.schoolData; 
+                            schoolData.apiUrl = myApi; 
+                            schoolData.logo = myLogo; 
                         }
                         
                         saveData(true); updateSyncUI('success');
-                        if(isManual) Swal.fire('Berhasil', 'Data ditarik.', 'success').then(() => { if(document.getElementById('studentListContainer')) renderTeacherDashboard(); });
+                        
+                        // RE-RENDER JIKA DI HALAMAN TERKAIT
+                        if(currentScreen === 'splash') renderSplash();
                         else if(currentScreen === 'teacher_dashboard') renderTeacherDashboard();
+                        
+                        if(isManual) Swal.fire('Berhasil', 'Data ditarik.', 'success');
                     } else if (students.length > 0) { 
                         syncToCloud(); updateSyncUI('success'); 
                     }
@@ -297,7 +320,6 @@
                 const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
                 
                 let added = 0;
-                // Format: A(0)=Nama, B(1)=NIS, C(2)=Kelas, D(3)=TglLahir
                 for(let i=1; i<jsonData.length; i++) {
                     const row = jsonData[i];
                     if(row[0] && row[1]) {
@@ -310,7 +332,8 @@
                             } else {
                                 dob = "";
                             }
-
+                            // Row 4 (index 4) is address (removed based on request, using as blank or custom)
+                            // User asked to remove Address field, so we just ignore it or store blank
                             students.push({
                                 name: row[0], nis: nis, kelas: row[2] || "-", 
                                 dob: dob, address: "", photo: "", studentPhoto: ""
@@ -330,7 +353,7 @@
             currentScreen = 'splash';
             document.getElementById('fixedHeader').style.display = 'none'; document.getElementById('bottomStatus').classList.add('hidden'); document.body.style.paddingTop = "0";
             const logoSrc = schoolData.logo || "logo.png";
-            const html = `<div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden"><div class="mb-6 relative animate-bounce"><div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full opacity-60"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 57.0 (History Fix)</p></div></div>`;
+            const html = `<div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden"><div class="mb-6 relative animate-bounce"><div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full opacity-60"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 57.0 (Final Layout)</p></div></div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
@@ -353,7 +376,7 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
-        // --- STUDENT DETAIL & TABS (FIXED LOGIC) ---
+        // --- STUDENT DETAIL & TABS (OPTIMIZED LAYOUT) ---
         function renderStudentDetail(nis, activeTab = 'good') {
             currentScreen = 'teacher_detail';
             const student = students.find(s => String(s.nis) === String(nis)); if(!student) return;
@@ -361,26 +384,17 @@
             
             const sortedBehaviors = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1));
             
-            const good = sortedBehaviors.filter(b => b.type === 'plus').map(b => 
-                `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">+${b.points}</span></button>`
-            ).join('');
-
-            const bad = sortedBehaviors.filter(b => b.type === 'minus').map(b => 
-                `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">${b.points}</span></button>`
-            ).join('');
+            // Buttons
+            const good = sortedBehaviors.filter(b => b.type === 'plus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">+${b.points}</span></button>`).join('');
+            const bad = sortedBehaviors.filter(b => b.type === 'minus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">${b.points}</span></button>`).join('');
             
-            // HISTORY LIST WITH DELETE & TIMESTAMP (FIXED)
+            // HISTORY LIST FILTERED BY TAB
             const studentLogs = logs.filter(l => String(l.studentId) === String(nis)).sort((a,b)=>b.id-a.id);
             let filteredHistory = [];
 
-            if (activeTab === 'good') {
-                filteredHistory = studentLogs.filter(l => l.points > 0);
-            } else if (activeTab === 'bad') {
-                filteredHistory = studentLogs.filter(l => l.points < 0);
-            } else {
-                // Notes includes neutral (catatan)
-                filteredHistory = studentLogs.filter(l => l.points === 0 || l.note);
-            }
+            if (activeTab === 'good') filteredHistory = studentLogs.filter(l => l.points > 0);
+            else if (activeTab === 'bad') filteredHistory = studentLogs.filter(l => l.points < 0);
+            else filteredHistory = studentLogs.filter(l => l.points === 0 || l.note); // Note tab
 
             const historyList = filteredHistory.map(l => `
                 <div class="history-item">
@@ -394,8 +408,8 @@
                         <button onclick="deleteLog(${l.id}, '${nis}', '${activeTab}')" class="text-gray-300 hover:text-red-500 p-1"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
-            `).join('') || '<div class="text-center text-xs text-gray-400 mt-2">Belum ada riwayat di kategori ini.</div>';
-            
+            `).join('') || '<div class="text-center text-xs text-gray-400 mt-2">Belum ada riwayat.</div>';
+
             const html = `
                 <div class="px-4 pb-10 fade-in">
                     <div class="bg-white rounded-2xl shadow-lg p-5 mb-6 text-center relative overflow-hidden">
@@ -410,24 +424,29 @@
                         </div>
                     </div>
 
-                    <!-- RIWAYAT SECTION (Moved UP) -->
+                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl">
+                        <button onclick="setTab('good')" id="btn-good" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button>
+                        <button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button>
+                        <button onclick="setTab('note')" id="btn-note" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'}">Catatan</button>
+                    </div>
+
+                    <!-- RIWAYAT DULUAN (LAYOUT CHANGE) -->
                     <div class="mb-6">
                         <h3 class="font-bold text-gray-700 mb-2 text-sm ml-1 border-b pb-1">Riwayat ${activeTab==='good'?'Positif':(activeTab==='bad'?'Negatif':'Catatan')}</h3>
                         <div class="bg-gray-50 rounded-xl p-2 max-h-60 overflow-y-auto border border-gray-200 shadow-inner">
                             ${historyList}
                         </div>
                     </div>
-
-                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl">
-                        <button onclick="setTab('good')" id="btn-good" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button>
-                        <button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button>
-                        <button onclick="setTab('note')" id="btn-note" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'}">Catatan</button>
-                    </div>
                     
-                    <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}">${good}</div>
-                    <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}">${bad}</div>
+                    <!-- INPUT BUTTONS DI BAWAH RIWAYAT -->
+                    <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}">
+                        <div class="grid grid-cols-2 gap-3">${good}</div>
+                    </div>
+                    <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}">
+                        <div class="grid grid-cols-2 gap-3">${bad}</div>
+                    </div>
                     <div id="tab-note" class="${activeTab==='note'?'block':'hidden'}">
-                        <textarea id="noteInput" rows="3" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400" placeholder="Tulis catatan..."></textarea>
+                        <textarea id="noteInput" rows="3" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400" placeholder="Tulis catatan guru..."></textarea>
                         <button onclick="addNoteOnly('${nis}')" class="btn-3d btn-blue w-full mt-3 py-2 rounded-lg font-bold">Kirim Catatan</button>
                     </div>
 
@@ -469,13 +488,8 @@
             const b = behaviors.find(x => String(x.id) === String(bid)); 
             if(b) {
                 logs.push({ 
-                    id: Date.now(), 
-                    studentId: nis, 
-                    studentName: students.find(s=>String(s.nis)===String(nis)).name,
-                    behaviorLabel: b.label, 
-                    points: Number(b.points), 
-                    type: b.type, 
-                    date: new Date().toISOString() 
+                    id: Date.now(), studentId: nis, studentName: students.find(s=>String(s.nis)===String(nis)).name,
+                    behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() 
                 }); 
                 saveData(); 
                 Swal.fire({ title: 'Berhasil', text: `${b.label} (${b.points})`, icon: 'success', timer: 700, showConfirmButton: false }).then(() => renderStudentDetail(nis, currentTab)); 
@@ -526,7 +540,7 @@
         function delBehavior(idx) { behaviors.splice(idx, 1); saveData(); renderManageBehaviors(); }
         function deleteStudent(nis) { Swal.fire({ title: 'Hapus?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya' }).then(r => { if(r.isConfirmed) { students = students.filter(s => String(s.nis) !== String(nis)); logs = logs.filter(l => String(l.studentId) !== String(nis)); saveData(); renderTeacherDashboard(); } }); }
         function renderEditStudent(nis) { currentScreen = 'edit_student'; const s = students.find(x => String(x.nis) === String(nis)); if (!s) return; const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${s.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700">NIS</label><input type="text" value="${s.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div><div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${s.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700">Tanggal Lahir</label><input type="date" name="dob" value="${cleanDateForInput(s.dob)}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div><button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold text-white">UPDATE</button><button type="button" onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button></form></div>`; document.getElementById('appContent').innerHTML = html; }
-        async function handleUpdateStudent(e, oldNis) { e.preventDefault(); const f = e.target; const idx = students.findIndex(s => String(s.nis) === String(oldNis)); if (idx === -1) return; const save = (p) => { students[idx] = { ...students[idx], name: f.name.value, kelas: f.kelas.value, dob: f.dob.value, photo: p }; saveData(); Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetail(oldNis)); }; const file = document.getElementById('photoInputEdit').files[0]; if (file) { compressImage(file).then(res => save(res)).catch(() => save("")); } else { save(students[idx].photo); } }
+        async function handleUpdateStudent(e, oldNis) { e.preventDefault(); const f = e.target; const idx = students.findIndex(s => String(s.nis) === String(oldNis)); if (idx === -1) return; const save = (p) => { students[idx] = { ...students[idx], name: f.name.value, kelas: f.kelas.value, dob: f.dob.value, address: "", photo: p }; saveData(); Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetail(oldNis)); }; const file = document.getElementById('photoInputEdit').files[0]; if (file) { compressImage(file).then(res => save(res)).catch(() => save("")); } else { save(students[idx].photo); } }
         function renderSetup() { currentScreen = 'setup'; const html = `<div class="pt-20 px-6 fade-in pb-10"><h2 class="text-2xl font-bold text-gray-800 mb-4">Pengaturan</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4"><h3 class="font-bold text-blue-800 mb-2">Sinkronisasi Spreadsheet</h3><input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2"><div class="flex gap-2"><button onclick="checkConnectionAndSave(document.querySelector('#apiUrlInput').value)" class="flex-1 btn-3d btn-blue px-2 py-2 rounded-lg text-sm font-bold">Simpan & Test</button></div><button onclick="copyShareLink()" class="w-full btn-3d btn-orange px-2 py-2 rounded-lg text-sm font-bold mt-2"><i class="fas fa-share-alt mr-2"></i> Salin Link Untuk Siswa</button></div><div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4"><h3 class="font-bold text-gray-700 mb-2">Backup Manual</h3><div class="flex gap-2"><button onclick="downloadBackup()" class="flex-1 btn-3d btn-green py-2 rounded-lg text-xs font-bold">Download</button><button onclick="triggerRestore()" class="flex-1 btn-3d btn-orange py-2 rounded-lg text-xs font-bold">Upload</button><input type="file" id="restoreInput" style="display:none" onchange="handleRestore(event)"></div></div><div class="space-y-3"><div><label class="block text-sm font-bold">Nama Sekolah</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-2 border rounded"></div><div><label class="block text-sm font-bold">Lokasi</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-2 border rounded"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold text-white">Simpan Profil</button></div><div class="mt-8 border-t pt-4"><button onclick="resetAll()" class="w-full py-3 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div></div>`; document.getElementById('appContent').innerHTML = html; }
         function checkConnectionAndSave(url) { if(!url) return Swal.fire('Error', 'URL Kosong', 'error'); if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; Swal.fire({ title: 'Menyimpan...', didOpen: () => { Swal.showLoading(); schoolData.apiUrl = url; saveData(); setTimeout(() => { Swal.fire('Terkirim', 'Cek Spreadsheet.', 'success'); document.querySelector('input[name="apiUrl"]').value = url; }, 2000); } }); }
         
@@ -566,7 +580,7 @@
                             } else {
                                 dob = "";
                             }
-
+                            // Address removed
                             students.push({
                                 name: row[0], nis: nis, kelas: row[2] || "-", 
                                 dob: dob, address: "", photo: "", studentPhoto: ""
