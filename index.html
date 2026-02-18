@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sistem Poin Siswa</title>
+    <title>Sistem Poin Siswa - SDIT Qurratu A'yun Al-Islami</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -59,7 +59,7 @@
         }
         .icon-btn:active { transform: scale(0.95); background: #e2e8f0; }
 
-        /* LIST ITEM STYLES (COMPACT) */
+        /* LIST ITEM STYLES */
         .list-item-card {
             display: flex; align-items: center; justify-content: space-between;
             padding: 12px 16px; margin-bottom: 8px; width: 100%;
@@ -79,15 +79,15 @@
         .icon-box { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
         .point-badge { padding: 2px 10px; border-radius: 20px; font-weight: 800; font-size: 0.8rem; min-width: 40px; text-align: center; }
 
-        /* Tab Buttons */
+        /* History List Item */
+        .history-item { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+
+        /* Tabs */
         .tab-btn { flex: 1; padding: 10px; font-weight: bold; font-size: 0.8rem; border-radius: 8px; transition: all 0.2s; border: 1px solid transparent; }
         .tab-active-good { background: #dcfce7; color: #166534; border-color: #22c55e; }
         .tab-active-bad { background: #fee2e2; color: #991b1b; border-color: #ef4444; }
         .tab-active-note { background: #dbeafe; color: #1e40af; border-color: #3b82f6; }
         .tab-inactive { background: white; color: #9ca3af; border-color: #e5e7eb; }
-
-        /* History List Item */
-        .history-item { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
 
         .bg-pattern { background-color: #f8fafc; background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px); background-size: 24px 24px; }
         ::-webkit-scrollbar { width: 0px; background: transparent; } .fade-in { animation: fadeIn 0.4s ease-in-out; }
@@ -156,7 +156,8 @@
 
         try {
             schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
-            if (!schoolData.name) { let savedApi = schoolData.apiUrl || ""; schoolData = { ...defaultSchoolData, apiUrl: savedApi }; }
+            // Ensure data structure
+            if (!schoolData.name) schoolData.name = defaultSchoolData.name;
             students = JSON.parse(localStorage.getItem('students')) || [];
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
@@ -175,7 +176,8 @@
         function checkAutoConfig() {
             const urlParams = new URLSearchParams(window.location.search);
             const apiLink = urlParams.get('api');
-            const schoolName = urlParams.get('school'); // Ambil Nama Sekolah
+            const schoolName = urlParams.get('school'); 
+            const mode = urlParams.get('mode'); // Detect Mode
 
             let isUpdated = false;
 
@@ -190,17 +192,21 @@
 
             if (isUpdated) {
                 saveData(true);
+                // Hide params from URL for cleanliness
                 window.history.replaceState({}, document.title, window.location.pathname);
-                renderSplash(); // Refresh tampilan langsung
                 
                 Swal.fire({
                     title: 'Terhubung!',
                     text: `Tersambung ke ${schoolData.name}`,
                     icon: 'success',
-                    timer: 2000,
+                    timer: 1500,
                     showConfirmButton: false
                 }).then(() => {
-                    if(apiLink) loadFromCloud(true);
+                    loadFromCloud(true);
+                    // AUTO JUMP TO STUDENT MODE IF REQUESTED
+                    if(mode === 'student') {
+                        renderStudentLogin();
+                    }
                 });
             }
         }
@@ -315,17 +321,27 @@
             } catch(e) { return d; }
         }
 
-        // SMART COPY LINK
+        // --- SMART COPY LINK ---
         function copyShareLink() { 
-            if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting.', 'error'); 
+            // Ambil URL dari Input jika belum disimpan
+            let urlToShare = schoolData.apiUrl;
+            const inputEl = document.getElementById('apiUrlInput');
+            if(inputEl && inputEl.value) urlToShare = inputEl.value;
+
+            if(!urlToShare) return Swal.fire('Gagal', 'Link Script belum diisi.', 'error'); 
+
+            // Bersihkan URL
+            if(urlToShare.includes('/edit')) urlToShare = urlToShare.split('/edit')[0] + '/exec';
+
             const baseUrl = window.location.href.split('?')[0]; 
-            // Sisipkan Nama Sekolah di Link
-            const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}`; 
+            // Tambahkan parameter sekolah dan mode student
+            const finalLink = `${baseUrl}?api=${encodeURIComponent(urlToShare)}&school=${encodeURIComponent(schoolData.name)}&mode=student`; 
             
             const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); 
+            
             Swal.fire({ 
                 title: 'Link Tersalin!', 
-                html: '<p class="text-sm">Link ini sudah berisi <b>Nama Sekolah</b> dan <b>Database</b>.<br>Murid tinggal klik dan langsung terhubung.</p>', 
+                html: '<p class="text-sm">Link ini otomatis akan membuka <b>Nama Sekolah</b> dan langsung masuk ke <b>Login Murid</b>.</p>', 
                 icon: 'success' 
             }); 
         }
@@ -351,11 +367,12 @@
                             if (typeof dob === 'number') {
                                 const dateInfo = new Date(Math.round((dob - 25569) * 86400 * 1000));
                                 dob = dateInfo.toISOString().split('T')[0];
-                            } else { dob = ""; }
-                            // Add student (no address)
+                            } else {
+                                dob = "";
+                            }
                             students.push({
                                 name: row[0], nis: nis, kelas: row[2] || "-", 
-                                dob: dob, photo: "", studentPhoto: ""
+                                dob: dob, address: "", photo: "", studentPhoto: ""
                             });
                             added++;
                         }
@@ -372,7 +389,7 @@
             currentScreen = 'splash';
             document.getElementById('fixedHeader').style.display = 'none'; document.getElementById('bottomStatus').classList.add('hidden'); document.body.style.paddingTop = "0";
             const logoSrc = schoolData.logo || "logo.png";
-            const html = `<div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden"><div class="mb-6 relative animate-bounce"><div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full opacity-60"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 58.0 (Final Sync)</p></div></div>`;
+            const html = `<div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden"><div class="mb-6 relative animate-bounce"><div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full opacity-60"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 59.0 (Smart Link)</p></div></div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
@@ -403,22 +420,14 @@
             
             const sortedBehaviors = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1));
             
-            // LIST LAYOUT
-            const good = sortedBehaviors.filter(b => b.type === 'plus').map(b => 
-                `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">+${b.points}</span></button>`
-            ).join('');
-
-            const bad = sortedBehaviors.filter(b => b.type === 'minus').map(b => 
-                `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">${b.points}</span></button>`
-            ).join('');
+            const good = sortedBehaviors.filter(b => b.type === 'plus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">+${b.points}</span></button>`).join('');
+            const bad = sortedBehaviors.filter(b => b.type === 'minus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">${b.points}</span></button>`).join('');
             
-            // HISTORY LIST WITH DELETE & TIMESTAMP (FIX)
             const studentLogs = logs.filter(l => String(l.studentId) === String(nis)).sort((a,b)=>b.id-a.id);
             let filteredHistory = [];
-
             if (activeTab === 'good') filteredHistory = studentLogs.filter(l => l.points > 0);
             else if (activeTab === 'bad') filteredHistory = studentLogs.filter(l => l.points < 0);
-            else filteredHistory = studentLogs.filter(l => l.points === 0 || l.note); // Note tab
+            else filteredHistory = studentLogs.filter(l => l.points === 0 || l.note);
 
             const historyList = filteredHistory.map(l => `
                 <div class="history-item">
@@ -432,7 +441,7 @@
                         <button onclick="deleteLog(${l.id}, '${nis}', '${activeTab}')" class="text-gray-300 hover:text-red-500 p-1"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
-            `).join('') || '<div class="text-center text-xs text-gray-400 mt-2">Belum ada riwayat di kategori ini.</div>';
+            `).join('') || '<div class="text-center text-xs text-gray-400 mt-2">Belum ada riwayat.</div>';
             
             const html = `
                 <div class="px-4 pb-10 fade-in">
@@ -440,84 +449,31 @@
                         <div class="absolute top-0 left-0 w-full h-20 bg-blue-500"></div>
                         <div class="absolute top-2 right-2 flex gap-2 z-20"><button onclick="renderEditStudent('${nis}')" class="btn-3d btn-yellow p-2 rounded-lg text-xs font-bold"><i class="fas fa-edit"></i></button><button onclick="deleteStudent('${nis}')" class="btn-3d btn-red p-2 rounded-lg text-xs font-bold"><i class="fas fa-trash"></i></button></div>
                         <div class="relative z-10 w-24 h-24 mx-auto bg-white rounded-full p-1 shadow-md -mb-12 mt-4"><img src="${student.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full rounded-full object-cover"></div>
-                        <div class="mt-14">
-                            <h2 class="text-xl font-bold text-gray-800">${student.name}</h2>
-                            <p class="text-gray-500 text-sm">${student.kelas} | ${student.nis}</p>
-                            <p class="text-gray-400 text-xs mt-1"><i class="fas fa-birthday-cake mr-1"></i> ${formatDisplayDate(student.dob)}</p>
-                            <div class="mt-4 inline-block px-6 py-2 rounded-full ${points>=0?'bg-green-100 text-green-700':'bg-red-100 text-red-700'} font-black text-2xl border-2 border-opacity-20 border-black">${points} Poin</div>
-                        </div>
+                        <div class="mt-14"><h2 class="text-xl font-bold text-gray-800">${student.name}</h2><p class="text-gray-500 text-sm">${student.kelas} | ${student.nis}</p><p class="text-gray-400 text-xs mt-1"><i class="fas fa-birthday-cake mr-1"></i> ${formatDisplayDate(student.dob)}</p><div class="mt-4 inline-block px-6 py-2 rounded-full ${points>=0?'bg-green-100 text-green-700':'bg-red-100 text-red-700'} font-black text-2xl border-2 border-opacity-20 border-black">${points} Poin</div></div>
                     </div>
-                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl">
-                        <button onclick="setTab('good')" id="btn-good" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button>
-                        <button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button>
-                        <button onclick="setTab('note')" id="btn-note" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'}">Catatan</button>
-                    </div>
+                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl"><button onclick="setTab('good')" id="btn-good" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button><button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button><button onclick="setTab('note')" id="btn-note" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'}">Catatan</button></div>
                     
-                    <!-- RIWAYAT SECTION (Moved UP) -->
-                    <div class="mb-6">
-                        <h3 class="font-bold text-gray-700 mb-2 text-sm ml-1 border-b pb-1">Riwayat ${activeTab==='good'?'Positif':(activeTab==='bad'?'Negatif':'Catatan')}</h3>
-                        <div class="bg-gray-50 rounded-xl p-2 max-h-60 overflow-y-auto border border-gray-200 shadow-inner">
-                            ${historyList}
-                        </div>
-                    </div>
+                    <div class="mb-6"><h3 class="font-bold text-gray-700 mb-2 text-sm ml-1 border-b pb-1">Riwayat ${activeTab==='good'?'Positif':(activeTab==='bad'?'Negatif':'Catatan')}</h3><div class="bg-gray-50 rounded-xl p-2 max-h-60 overflow-y-auto border border-gray-200 shadow-inner">${historyList}</div></div>
                     
-                    <!-- INPUT BUTTONS DI BAWAH RIWAYAT -->
-                    <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}">
-                        <div class="grid grid-cols-2 gap-3">${good}</div>
-                    </div>
-                    <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}">
-                        <div class="grid grid-cols-2 gap-3">${bad}</div>
-                    </div>
-                    <div id="tab-note" class="${activeTab==='note'?'block':'hidden'}">
-                        <textarea id="noteInput" rows="3" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400" placeholder="Tulis catatan guru..."></textarea>
-                        <button onclick="addNoteOnly('${nis}')" class="btn-3d btn-blue w-full mt-3 py-2 rounded-lg font-bold">Kirim Catatan</button>
-                    </div>
-
+                    <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}"><div class="grid grid-cols-2 gap-3">${good}</div></div>
+                    <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}"><div class="grid grid-cols-2 gap-3">${bad}</div></div>
+                    <div id="tab-note" class="${activeTab==='note'?'block':'hidden'}"><textarea id="noteInput" rows="3" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400" placeholder="Tulis catatan..."></textarea><button onclick="addNoteOnly('${nis}')" class="btn-3d btn-blue w-full mt-3 py-2 rounded-lg font-bold">Kirim Catatan</button></div>
                     <button onclick="renderTeacherDashboard()" class="w-full mt-8 py-3 bg-gray-200 text-gray-600 font-bold rounded-lg hover:bg-gray-300">Kembali ke Daftar</button>
                 </div>`;
             document.getElementById('appContent').innerHTML = html;
         }
         
-        function deleteLog(id, nis, tab) {
-            Swal.fire({ title: 'Hapus Poin?', text: "Data hilang permanen!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Hapus' }).then((result) => { if (result.isConfirmed) { logs = logs.filter(l => String(l.id) !== String(id)); saveData(); renderStudentDetail(nis, tab); Swal.fire('Terhapus', '', 'success'); } });
-        }
+        function deleteLog(id, nis, tab) { Swal.fire({ title: 'Hapus Poin?', text: "Data hilang permanen!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Hapus' }).then((result) => { if (result.isConfirmed) { logs = logs.filter(l => String(l.id) !== String(id)); saveData(); renderStudentDetail(nis, tab); Swal.fire('Terhapus', '', 'success'); } }); }
 
         window.setTab = function(type) {
             const editBtn = document.querySelector('button[onclick^="renderEditStudent"]');
-            if (editBtn) {
-                const nis = editBtn.getAttribute('onclick').split("'")[1];
-                renderStudentDetail(nis, type);
-            } else {
-                // Mode Murid
-                ['good', 'bad', 'note'].forEach(t => {
-                    const el = document.getElementById('tab-' + t);
-                    if(el) { if(t === type) el.classList.remove('hidden'); else el.classList.add('hidden'); }
-                });
-                ['good', 'bad', 'note'].forEach(t => {
-                    const btn = document.getElementById('btn-' + t);
-                    if(btn) {
-                        btn.className = "tab-btn tab-inactive";
-                        if(t === type) {
-                             if(type === 'good') btn.className = "tab-btn tab-active-good";
-                             if(type === 'bad') btn.className = "tab-btn tab-active-bad";
-                             if(type === 'note') btn.className = "tab-btn tab-active-note";
-                        }
-                    }
-                });
+            if (editBtn) { const nis = editBtn.getAttribute('onclick').split("'")[1]; renderStudentDetail(nis, type); } 
+            else { 
+                ['good', 'bad', 'note'].forEach(t => { document.getElementById('tab-' + t).classList.toggle('hidden', t !== type); document.getElementById('btn-' + t).className = t === type ? `tab-btn tab-active-${t}` : "tab-btn tab-inactive"; });
             }
         }
 
-        function addPoint(nis, bid, currentTab) { 
-            const b = behaviors.find(x => String(x.id) === String(bid)); 
-            if(b) {
-                logs.push({ 
-                    id: Date.now(), studentId: nis, studentName: students.find(s=>String(s.nis)===String(nis)).name,
-                    behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() 
-                }); 
-                saveData(); 
-                Swal.fire({ title: 'Berhasil', text: `${b.label} (${b.points})`, icon: 'success', timer: 700, showConfirmButton: false }).then(() => renderStudentDetail(nis, currentTab)); 
-            }
-        }
+        function addPoint(nis, bid, currentTab) { const b = behaviors.find(x => String(x.id) === String(bid)); if(b) { logs.push({ id: Date.now(), studentId: nis, studentName: students.find(s=>String(s.nis)===String(nis)).name, behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() }); saveData(); Swal.fire({ title: 'Berhasil', text: `${b.label} (${b.points})`, icon: 'success', timer: 700, showConfirmButton: false }).then(() => renderStudentDetail(nis, currentTab)); } }
         function addNoteOnly(nis) { const txt = document.getElementById('noteInput').value; if(!txt) return; logs.push({ id: Date.now(), studentId: nis, studentName: students.find(s=>String(s.nis)===String(nis)).name, behaviorLabel: "Catatan Guru", points: 0, type: 'neutral', note: txt, date: new Date().toISOString() }); saveData(); Swal.fire('Terkirim', '', 'success').then(()=> renderStudentDetail(nis, 'note')); }
 
         function renderStudentLogin() { currentScreen = 'student_login'; const html = `<div class="flex flex-col items-center justify-center min-h-[70vh] px-6 fade-in"><div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 text-3xl shadow-inner"><i class="fas fa-lock"></i></div><h2 class="text-2xl font-bold text-gray-800 mb-2">Login Murid</h2><input id="loginNis" placeholder="Masukkan NIS" class="w-full p-4 border rounded text-center text-xl mb-4 shadow-sm"><button onclick="handleLogin()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white shadow-lg">MASUK</button></div>`; document.getElementById('appContent').innerHTML = html; }
@@ -528,8 +484,10 @@
             const myLogs = logs.filter(l => String(l.studentId) === String(s.nis)).sort((a,b) => b.id - a.id);
             const displayPhoto = s.studentPhoto && s.studentPhoto.length > 50 ? s.studentPhoto : (s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png');
 
-            const posList = myLogs.filter(l => l.points > 0).map(l => `<div class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-check-circle"></i></div><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge">+${l.points}</span><div class="text-[10px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
-            const negList = myLogs.filter(l => l.points < 0).map(l => `<div class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-exclamation-circle"></i></div><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge">${l.points}</span><div class="text-[10px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
+            const createList = (list, color) => list.map(l => `<div class="list-item-card border-${color}-200 mb-2"><div class="flex items-center gap-3"><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><div class="text-right"><span class="font-bold text-${color}-600">${l.points>0?'+':''}${l.points}</span><br><span class="text-[10px] text-gray-400">${formatLogDate(l.date)}</span></div></div>`).join('');
+            
+            const posList = createList(myLogs.filter(l => l.points > 0), 'green') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
+            const negList = createList(myLogs.filter(l => l.points < 0), 'red') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
             const noteList = myLogs.filter(l => l.note).map(l => `<div class="bg-blue-50 p-2 mb-2 rounded border border-blue-200 text-sm">"${l.note}"<br><small class="text-gray-400">${formatLogDate(l.date)}</small></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada pesan</div>';
 
             const html = `
@@ -575,46 +533,7 @@
         function downloadBackup() { const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors})); const downloadAnchorNode = document.createElement('a'); downloadAnchorNode.setAttribute("href", dataStr); downloadAnchorNode.setAttribute("download", "Backup_Poin_" + new Date().toISOString().slice(0,10) + ".json"); document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove(); }
         function triggerRestore() { document.getElementById('restoreInput').click(); }
         function handleRestore(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function(e) { try { const data = JSON.parse(e.target.result); if(data.students && data.logs) { students = data.students; logs = data.logs; behaviors = data.behaviors || behaviors; if(data.schoolData) schoolData = data.schoolData; saveData(true); Swal.fire('Berhasil', 'Data dipulihkan.', 'success').then(() => location.reload()); } else { Swal.fire('Gagal', 'Format salah.', 'error'); } } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); } }; reader.readAsText(file); }
-        function copyShareLink() { if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting.', 'error'); const baseUrl = window.location.href.split('?')[0]; const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}`; const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); Swal.fire({ title: 'Link Tersalin!', html: '<p class="text-sm">Bagikan link ini ke Grup WA Siswa.<br>Saat diklik, aplikasi siswa akan otomatis terhubung.</p>', icon: 'success' }); }
-        
-        // --- EXCEL IMPORT ---
-        function triggerImport() { document.getElementById('excelInput').click(); }
-        function processExcel(e) {
-            const file = e.target.files[0]; if(!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
-                
-                let added = 0;
-                // Format: A(0)=Nama, B(1)=NIS, C(2)=Kelas, D(3)=TglLahir
-                for(let i=1; i<jsonData.length; i++) {
-                    const row = jsonData[i];
-                    if(row[0] && row[1]) {
-                        const nis = String(row[1]).trim();
-                        if(!students.find(s => String(s.nis) === nis)) {
-                            let dob = row[3];
-                            if (typeof dob === 'number') {
-                                const dateInfo = new Date(Math.round((dob - 25569) * 86400 * 1000));
-                                dob = dateInfo.toISOString().split('T')[0];
-                            } else {
-                                dob = "";
-                            }
-                            students.push({
-                                name: row[0], nis: nis, kelas: row[2] || "-", 
-                                dob: dob, photo: "", studentPhoto: ""
-                            });
-                            added++;
-                        }
-                    }
-                }
-                saveData();
-                Swal.fire('Selesai', `Berhasil mengimpor ${added} siswa.`, 'success').then(() => renderTeacherDashboard());
-            };
-            reader.readAsArrayBuffer(file);
-        }
+        function copyShareLink() { if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting.', 'error'); const baseUrl = window.location.href.split('?')[0]; const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}`; const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); Swal.fire({ title: 'Link Tersalin!', html: '<p class="text-sm">Bagikan link ini ke Grup WA Siswa.<br>Saat diklik, aplikasi siswa akan otomatis terhubung.</p>', icon: 'success' }); }
 
         window.onload = function() { checkAutoConfig(); renderSplash(); if(schoolData.apiUrl) loadFromCloud(); };
     </script>
