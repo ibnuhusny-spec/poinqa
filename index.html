@@ -83,7 +83,7 @@
         .history-item { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
 
         /* Tabs */
-        .tab-btn { flex: 1; padding: 10px; font-weight: bold; font-size: 0.8rem; border-radius: 8px; transition: all 0.2s; border: 1px solid transparent; }
+        .tab-btn { flex: 1; padding: 10px; font-weight: bold; font-size: 0.8rem; border-radius: 8px; transition: all 0.2s; border: 1px solid transparent; position: relative; }
         .tab-active-good { background: #dcfce7; color: #166534; border-color: #22c55e; }
         .tab-active-bad { background: #fee2e2; color: #991b1b; border-color: #ef4444; }
         .tab-active-note { background: #dbeafe; color: #1e40af; border-color: #3b82f6; }
@@ -175,37 +175,10 @@
         function checkAutoConfig() {
             const urlParams = new URLSearchParams(window.location.search);
             const apiLink = urlParams.get('api');
-            const schoolName = urlParams.get('school'); 
-            const mode = urlParams.get('mode');
-
-            let isUpdated = false;
-
             if (apiLink) {
-                schoolData.apiUrl = apiLink;
-                isUpdated = true;
-            }
-            if (schoolName) {
-                schoolData.name = decodeURIComponent(schoolName);
-                isUpdated = true;
-            }
-
-            if (isUpdated) {
-                saveData(true);
+                schoolData.apiUrl = apiLink; saveData(true);
                 window.history.replaceState({}, document.title, window.location.pathname);
-                renderSplash(); 
-                
-                Swal.fire({
-                    title: 'Terhubung!',
-                    text: `Tersambung ke ${schoolData.name}`,
-                    icon: 'success',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    loadFromCloud(true);
-                    if(mode === 'student') {
-                        renderStudentLogin();
-                    }
-                });
+                Swal.fire({ title: 'Terhubung!', icon: 'success', timer: 1500, showConfirmButton: false }).then(() => loadFromCloud(true));
             }
         }
 
@@ -241,11 +214,7 @@
         function syncToCloud() {
             if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); updateSyncUI('loading');
             
-            const lightStudents = students.map(s => { 
-                const { photo, ...sisa } = s; 
-                return sisa; 
-            });
-
+            const lightStudents = students.map(s => { const { photo, ...sisa } = s; return sisa; });
             const enrichedLogs = logs.map(l => {
                 const s = students.find(st => String(st.nis) === String(l.studentId));
                 return { ...l, studentName: s ? s.name : "Tanpa Nama", points: Number(l.points) };
@@ -272,7 +241,8 @@
                             return { 
                                 ...cloudS, 
                                 photo: (localS && localS.photo && localS.photo.length > 50) ? localS.photo : (cloudS.photo || ""),
-                                studentPhoto: cloudS.studentPhoto || (localS ? localS.studentPhoto : "")
+                                studentPhoto: cloudS.studentPhoto || (localS ? localS.studentPhoto : ""),
+                                studentCover: cloudS.studentCover || (localS ? localS.studentCover : "")
                             };
                         });
                         
@@ -297,6 +267,8 @@
 
         // --- UTILS ---
         function compressImage(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); const maxWidth = 300; const scaleSize = maxWidth / img.width; canvas.width = maxWidth; canvas.height = maxWidth; /* Square Crop */ const ctx = canvas.getContext('2d'); const minDim = Math.min(img.width, img.height); const sx = (img.width - minDim) / 2; const sy = (img.height - minDim) / 2; ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, maxWidth, maxWidth); resolve(canvas.toDataURL('image/jpeg', 0.5)); }; }; }); }
+        function compressCover(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); const maxWidth = 500; const scaleSize = maxWidth / img.width; canvas.width = maxWidth; canvas.height = img.height * scaleSize; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', 0.5)); }; }; }); }
+
         function toBase64(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => resolve(r.result); }); }
         
         function cleanDateForInput(dateStr) {
@@ -323,23 +295,11 @@
             } catch(e) { return d; }
         }
 
-        function copyShareLink() { if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting.', 'error'); const baseUrl = window.location.href.split('?')[0]; const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}`; const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); Swal.fire({ title: 'Link Tersalin!', html: '<p class="text-sm">Bagikan link ini ke Grup WA Siswa.<br>Saat diklik, aplikasi siswa akan otomatis terhubung.</p>', icon: 'success' }); }
+        function copyShareLink() { if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting.', 'error'); const baseUrl = window.location.href.split('?')[0]; const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}&mode=student`; const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); Swal.fire({ title: 'Link Tersalin!', html: '<p class="text-sm">Bagikan link ini ke Grup WA Siswa.<br>Saat diklik, aplikasi siswa akan otomatis terhubung.</p>', icon: 'success' }); }
         
         // --- EXCEL IMPORT ---
         function triggerImport() { document.getElementById('excelInput').click(); }
-        
-        // DOWNLOAD TEMPLATE FUNCTION (ADDED)
-        function downloadTemplate() {
-            const ws = XLSX.utils.aoa_to_sheet([
-                ["Nama Lengkap", "NIS", "Kelas", "Tanggal Lahir (YYYY-MM-DD)", "Alamat (Kosongkan)"],
-                ["Ahmad Fulan", "12345", "1A", "2015-05-20", ""],
-                ["Siti Aminah", "12346", "1B", "2015-08-17", ""]
-            ]);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Template");
-            XLSX.writeFile(wb, "Template_Siswa.xlsx");
-        }
-
+        function downloadTemplate() { const ws = XLSX.utils.aoa_to_sheet([["Nama Lengkap", "NIS", "Kelas", "Tanggal Lahir (YYYY-MM-DD)", "Alamat (Kosongkan)"], ["Ahmad Fulan", "12345", "1A", "2015-05-20", ""], ["Siti Aminah", "12346", "1B", "2015-08-17", ""]]); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Template"); XLSX.writeFile(wb, "Template_Siswa.xlsx"); }
         function processExcel(e) {
             const file = e.target.files[0]; if(!file) return;
             const reader = new FileReader();
@@ -355,7 +315,6 @@
                     if(row[0] && row[1]) {
                         const nis = String(row[1]).trim();
                         if(!students.find(s => String(s.nis) === nis)) {
-                            // FIX: Convert Excel Date
                             let dob = row[3];
                             if (typeof dob === 'number') {
                                 const dateInfo = new Date(Math.round((dob - 25569) * 86400 * 1000));
@@ -365,7 +324,7 @@
                             }
                             students.push({
                                 name: row[0], nis: nis, kelas: row[2] || "-", 
-                                dob: dob, address: "", photo: "", studentPhoto: ""
+                                dob: dob, address: "", photo: "", studentPhoto: "", studentCover: ""
                             });
                             added++;
                         }
@@ -382,7 +341,7 @@
             currentScreen = 'splash';
             document.getElementById('fixedHeader').style.display = 'none'; document.getElementById('bottomStatus').classList.add('hidden'); document.body.style.paddingTop = "0";
             const logoSrc = schoolData.logo || "logo.png";
-            const html = `<div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden"><div class="mb-6 relative animate-bounce"><div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full opacity-60"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 59.0 (Template Button)</p></div></div>`;
+            const html = `<div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in overflow-hidden"><div class="mb-6 relative animate-bounce"><div class="w-32 h-32 md:w-40 md:h-40 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden"><img src="${logoSrc}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div></div><h1 class="text-3xl font-black text-blue-600 mb-2 tracking-tight drop-shadow-sm">Aplikasi Poin-QA</h1><h2 class="text-xl font-bold text-gray-700 mb-1 px-4 leading-tight">${schoolData.name}</h2><p class="text-md text-gray-500 font-medium mb-8">${schoolData.location}</p><button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs font-bold py-4 px-8 rounded-xl text-xl shadow-lg transform transition hover:scale-105 mb-10">MULAI APLIKASI</button><div class="absolute bottom-6 text-center w-full opacity-60"><p class="text-sm font-bold text-gray-500">Developer: Ibnu Husny</p><p class="text-xs text-gray-400">Versi 60.1 (Final Refinement)</p></div></div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
@@ -405,15 +364,22 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
-        // --- STUDENT DETAIL & TABS ---
+        // --- STUDENT DETAIL & TABS (FIXED LAYOUT & REMOVED ADDRESS) ---
         function renderStudentDetail(nis, activeTab = 'good') {
             currentScreen = 'teacher_detail';
             const student = students.find(s => String(s.nis) === String(nis)); if(!student) return;
-            const points = logs.filter(l => String(l.studentId) === String(nis)).reduce((sum, c) => sum + Number(c.points), 0);
+            // STATS CALCULATION
+            const posPoints = logs.filter(l => String(l.studentId) === String(nis) && l.points > 0).reduce((sum, c) => sum + Number(c.points), 0);
+            const negPoints = logs.filter(l => String(l.studentId) === String(nis) && l.points < 0).reduce((sum, c) => sum + Math.abs(Number(c.points)), 0);
+            const totalPoints = posPoints - negPoints;
+            
+            // PROFILE COVER
+            const displayPhoto = student.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png';
+            const displayCover = student.studentCover && student.studentCover.length > 50 ? student.studentCover : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiNlNWU3ZWIiLz48L3N2Zz4='; 
             
             const sortedBehaviors = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1));
             
-            // LIST LAYOUT - HORIZONTAL
+            // LIST ITEM UI
             const good = sortedBehaviors.filter(b => b.type === 'plus').map(b => 
                 `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">+${b.points}</span></button>`
             ).join('');
@@ -422,7 +388,7 @@
                 `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><span class="point-badge">${b.points}</span></button>`
             ).join('');
             
-            // HISTORY LIST WITH DELETE & TIMESTAMP (FIX)
+            // FILTER HISTORY & TIMESTAMP
             const studentLogs = logs.filter(l => String(l.studentId) === String(nis)).sort((a,b)=>b.id-a.id);
             let filteredHistory = [];
 
@@ -446,32 +412,58 @@
             
             const html = `
                 <div class="px-4 pb-10 fade-in">
-                    <div class="bg-white rounded-2xl shadow-lg p-5 mb-6 text-center relative overflow-hidden">
-                        <div class="absolute top-0 left-0 w-full h-20 bg-blue-500"></div>
-                        <div class="absolute top-2 right-2 flex gap-2 z-20"><button onclick="renderEditStudent('${nis}')" class="btn-3d btn-yellow p-2 rounded-lg text-xs font-bold"><i class="fas fa-edit"></i></button><button onclick="deleteStudent('${nis}')" class="btn-3d btn-red p-2 rounded-lg text-xs font-bold"><i class="fas fa-trash"></i></button></div>
-                        <div class="relative z-10 w-24 h-24 mx-auto bg-white rounded-full p-1 shadow-md -mb-12 mt-4"><img src="${student.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'}" class="w-full h-full rounded-full object-cover"></div>
-                        <div class="mt-14">
-                            <h2 class="text-xl font-bold text-gray-800">${student.name}</h2>
-                            <p class="text-gray-500 text-sm">${student.kelas} | ${student.nis}</p>
-                            <p class="text-gray-400 text-xs mt-1"><i class="fas fa-birthday-cake mr-1"></i> ${formatDisplayDate(student.dob)}</p>
-                            <div class="mt-4 inline-block px-6 py-2 rounded-full ${points>=0?'bg-green-100 text-green-700':'bg-red-100 text-red-700'} font-black text-2xl border-2 border-opacity-20 border-black">${points} Poin</div>
+                    <!-- PROFILE CARD (FB STYLE) -->
+                    <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-4 text-center">
+                         <div class="h-32 relative bg-gray-300">
+                             <img src="${displayCover}" class="w-full h-full object-cover">
+                        </div>
+                        <div class="relative w-24 h-24 mx-auto -mt-12 bg-white rounded-full p-1 shadow-md">
+                             <img src="${displayPhoto}" class="w-full h-full rounded-full object-cover">
+                        </div>
+                        
+                        <div class="pt-2 pb-4 px-4">
+                             <h2 class="text-xl font-bold text-gray-800">${student.name}</h2>
+                             <p class="text-xs text-gray-500 mt-1"><i class="fas fa-id-card mr-1"></i> ${student.nis} | ${student.kelas}</p>
+                             <p class="text-xs text-gray-400 mt-1"><i class="fas fa-birthday-cake mr-1"></i> ${formatDisplayDate(student.dob)}</p>
+                             
+                             <!-- 3 COLUMN STATS (MATCHING STUDENT VIEW) -->
+                             <div class="grid grid-cols-3 gap-2 mt-4">
+                                <div class="bg-green-50 p-2 rounded-lg border border-green-100">
+                                    <div class="text-[10px] text-green-600 font-bold uppercase">Positif</div>
+                                    <div class="text-lg font-black text-green-700">${posPoints}</div>
+                                </div>
+                                <div class="bg-red-50 p-2 rounded-lg border border-red-100">
+                                    <div class="text-[10px] text-red-600 font-bold uppercase">Negatif</div>
+                                    <div class="text-lg font-black text-red-700">${negPoints}</div>
+                                </div>
+                                <div class="bg-blue-50 p-2 rounded-lg border border-blue-100">
+                                    <div class="text-[10px] text-blue-600 font-bold uppercase">Total</div>
+                                    <div class="text-lg font-black text-blue-700">${totalPoints}</div>
+                                </div>
+                             </div>
+
+                             <div class="mt-4 flex justify-center gap-2">
+                                <button onclick="renderEditStudent('${nis}')" class="bg-yellow-400 text-white px-3 py-1 rounded text-xs font-bold shadow-md"><i class="fas fa-edit mr-1"></i> Edit</button>
+                                <button onclick="deleteStudent('${nis}')" class="bg-red-500 text-white px-3 py-1 rounded text-xs font-bold shadow-md"><i class="fas fa-trash mr-1"></i> Hapus</button>
+                             </div>
                         </div>
                     </div>
-                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl">
-                        <button onclick="setTab('good')" id="btn-good" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button>
-                        <button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button>
-                        <button onclick="setTab('note')" id="btn-note" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'}">Catatan</button>
-                    </div>
                     
-                    <!-- RIWAYAT SECTION (Moved UP) -->
+                    <!-- RIWAYAT SECTION (ATAS) -->
                     <div class="mb-6">
                         <h3 class="font-bold text-gray-700 mb-2 text-sm ml-1 border-b pb-1">Riwayat ${activeTab==='good'?'Positif':(activeTab==='bad'?'Negatif':'Catatan')}</h3>
                         <div class="bg-gray-50 rounded-xl p-2 max-h-60 overflow-y-auto border border-gray-200 shadow-inner">
                             ${historyList}
                         </div>
                     </div>
+
+                    <!-- TABS & INPUT (BAWAH) -->
+                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl">
+                        <button onclick="setTab('good')" id="btn-good" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button>
+                        <button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button>
+                        <button onclick="setTab('note')" id="btn-note" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'}">Catatan</button>
+                    </div>
                     
-                    <!-- INPUT BUTTONS BOTTOM -->
                     <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}">
                         ${good}
                     </div>
@@ -493,6 +485,12 @@
         }
 
         window.setTab = function(type) {
+            // FIX: REMOVE BADGE WHEN CLICKING NOTE
+            if (type === 'note') {
+                const badge = document.querySelector('#btn-note span.absolute'); // Select the badge
+                if (badge) badge.style.display = 'none'; // Hide it
+            }
+
             const editBtn = document.querySelector('button[onclick^="renderEditStudent"]');
             if (editBtn) {
                 const nis = editBtn.getAttribute('onclick').split("'")[1];
@@ -510,23 +508,50 @@
                         if(t === type) {
                              if(type === 'good') btn.className = "tab-btn tab-active-good";
                              if(type === 'bad') btn.className = "tab-btn tab-active-bad";
-                             if(type === 'note') btn.className = "tab-btn tab-active-note";
+                             if(type === 'note') {
+                                 btn.className = "tab-btn tab-active-note";
+                             }
                         }
                     }
                 });
             }
         }
 
-        function addPoint(nis, bid, currentTab) { const b = behaviors.find(x => String(x.id) === String(bid)); if(b) { logs.push({ id: Date.now(), studentId: nis, studentName: students.find(s=>String(s.nis)===String(nis)).name, behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() }); saveData(); Swal.fire({ title: 'Berhasil', text: `${b.label} (${b.points})`, icon: 'success', timer: 700, showConfirmButton: false }).then(() => renderStudentDetail(nis, currentTab)); } }
+        function addPoint(nis, bid, currentTab) { 
+            const b = behaviors.find(x => String(x.id) === String(bid)); 
+            if(b) {
+                logs.push({ 
+                    id: Date.now(), 
+                    studentId: nis, 
+                    studentName: students.find(s=>String(s.nis)===String(nis)).name,
+                    behaviorLabel: b.label, 
+                    points: Number(b.points), 
+                    type: b.type, 
+                    date: new Date().toISOString() 
+                }); 
+                saveData(); 
+                Swal.fire({ title: 'Berhasil', text: `${b.label} (${b.points})`, icon: 'success', timer: 700, showConfirmButton: false }).then(() => renderStudentDetail(nis, currentTab)); 
+            }
+        }
         function addNoteOnly(nis) { const txt = document.getElementById('noteInput').value; if(!txt) return; logs.push({ id: Date.now(), studentId: nis, studentName: students.find(s=>String(s.nis)===String(nis)).name, behaviorLabel: "Catatan Guru", points: 0, type: 'neutral', note: txt, date: new Date().toISOString() }); saveData(); Swal.fire('Terkirim', '', 'success').then(()=> renderStudentDetail(nis, 'note')); }
 
         function renderStudentLogin() { currentScreen = 'student_login'; const html = `<div class="flex flex-col items-center justify-center min-h-[70vh] px-6 fade-in"><div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 text-3xl shadow-inner"><i class="fas fa-lock"></i></div><h2 class="text-2xl font-bold text-gray-800 mb-2">Login Murid</h2><input id="loginNis" placeholder="Masukkan NIS" class="w-full p-4 border rounded text-center text-xl mb-4 shadow-sm"><button onclick="handleLogin()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white shadow-lg">MASUK</button></div>`; document.getElementById('appContent').innerHTML = html; }
         function handleLogin() { const nis = document.getElementById('loginNis').value.trim(); const s = students.find(x => String(x.nis).trim() === nis); if(s) { renderStudentDashboard(s); } else { if(schoolData.apiUrl) { Swal.fire({title: 'Mencari Data...', didOpen: () => { Swal.showLoading(); loadFromCloud(true); setTimeout(() => { Swal.close(); const found = students.find(x => String(x.nis).trim() === nis); if(found) renderStudentDashboard(found); else Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); }, 3000); }}); } else { Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); } } }
+        
+        // --- STUDENT DASHBOARD (IMPROVED UI & STATS) ---
         function renderStudentDashboard(s) {
             currentScreen = 'student_dashboard';
-            const points = logs.filter(l => String(l.studentId) === String(s.nis)).reduce((sum, c) => sum + Number(c.points), 0);
+            const posPoints = logs.filter(l => String(l.studentId) === String(s.nis) && l.points > 0).reduce((sum, c) => sum + Number(c.points), 0);
+            const negPoints = logs.filter(l => String(l.studentId) === String(s.nis) && l.points < 0).reduce((sum, c) => sum + Math.abs(Number(c.points)), 0);
+            const totalPoints = posPoints - negPoints;
+            
             const myLogs = logs.filter(l => String(l.studentId) === String(s.nis)).sort((a,b) => b.id - a.id);
             const displayPhoto = s.studentPhoto && s.studentPhoto.length > 50 ? s.studentPhoto : (s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png');
+            const displayCover = s.studentCover && s.studentCover.length > 50 ? s.studentCover : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiNlNWU3ZWIiLz48L3N2Zz4='; 
+
+            // Check for notes
+            const hasNotes = logs.some(l => String(l.studentId) === String(s.nis) && (l.note || l.behaviorLabel === "Catatan Guru"));
+            const noteBadge = hasNotes ? '<span class="absolute -top-1 -right-1 flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>' : '';
 
             const posList = myLogs.filter(l => l.points > 0).map(l => `<div class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-check-circle"></i></div><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge">+${l.points}</span><div class="text-[10px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
             const negList = myLogs.filter(l => l.points < 0).map(l => `<div class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-exclamation-circle"></i></div><span class="font-bold text-sm text-gray-700">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge">${l.points}</span><div class="text-[10px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-4 text-sm">Belum ada data</div>';
@@ -534,36 +559,71 @@
 
             const html = `
                 <div class="px-4 pb-20 fade-in">
-                    <div class="bg-white p-6 rounded-xl shadow-lg text-center mb-6 mt-4">
-                        <div class="relative w-24 h-24 mx-auto mb-3">
-                            <div class="w-24 h-24 bg-gray-200 rounded-full overflow-hidden border-4 border-blue-100">
-                                <img src="${displayPhoto}" class="w-full h-full object-cover">
-                            </div>
-                            <button onclick="updateStudentPhoto('${s.nis}')" class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full p-1.5 shadow text-xs"><i class="fas fa-camera"></i></button>
+                    <!-- PROFILE & COVER -->
+                    <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-4 text-center">
+                         <div class="h-32 relative bg-gray-300">
+                             <img src="${displayCover}" class="w-full h-full object-cover">
+                             <div class="absolute inset-0 bg-black bg-opacity-10"></div>
+                             <button onclick="updateStudentCover('${s.nis}')" class="absolute top-2 right-2 bg-white/80 p-1.5 rounded-full shadow text-gray-600 hover:text-blue-500"><i class="fas fa-camera text-xs"></i></button>
                         </div>
-                        <h2 class="text-2xl font-bold text-gray-800">${s.name}</h2>
-                        <p class="text-sm font-bold text-blue-500">${s.nis} | ${s.kelas}</p>
-                        <p class="text-xs text-gray-500 mt-1"><i class="fas fa-birthday-cake mr-1"></i> ${formatDisplayDate(s.dob)}</p>
-                        <div class="text-5xl font-black mt-4 ${points>=0?'text-green-600':'text-red-500'}">${points} <span class="text-sm font-normal text-gray-400">Poin</span></div>
+                        <div class="relative w-24 h-24 mx-auto -mt-12 bg-white rounded-full p-1 shadow-md">
+                             <img src="${displayPhoto}" class="w-full h-full rounded-full object-cover">
+                             <button onclick="updateStudentPhoto('${s.nis}')" class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full p-1.5 shadow text-xs"><i class="fas fa-camera"></i></button>
+                        </div>
+                        <div class="pt-2 pb-4 px-4">
+                             <h2 class="text-xl font-bold text-gray-800">${s.name}</h2>
+                             <p class="text-xs text-gray-500 mt-1"><i class="fas fa-id-card mr-1"></i> ${s.nis} | ${s.kelas}</p>
+                             
+                             <!-- 3 COLUMN STATS -->
+                             <div class="grid grid-cols-3 gap-2 mt-4">
+                                <div class="bg-green-50 p-2 rounded-lg border border-green-100">
+                                    <div class="text-[10px] text-green-600 font-bold uppercase">Positif</div>
+                                    <div class="text-lg font-black text-green-700">${posPoints}</div>
+                                </div>
+                                <div class="bg-red-50 p-2 rounded-lg border border-red-100">
+                                    <div class="text-[10px] text-red-600 font-bold uppercase">Negatif</div>
+                                    <div class="text-lg font-black text-red-700">${negPoints}</div>
+                                </div>
+                                <div class="bg-blue-50 p-2 rounded-lg border border-blue-100">
+                                    <div class="text-[10px] text-blue-600 font-bold uppercase">Total</div>
+                                    <div class="text-lg font-black text-blue-700">${totalPoints}</div>
+                                </div>
+                             </div>
+                        </div>
                     </div>
-                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl"><button onclick="setTab('good')" id="btn-good" class="tab-btn tab-active-good">Positif</button><button onclick="setTab('bad')" id="btn-bad" class="tab-btn tab-inactive">Negatif</button><button onclick="setTab('note')" id="btn-note" class="tab-btn tab-inactive">Pesan</button></div>
-                    <div id="tab-good" class="min-h-[300px]">${posList}</div><div id="tab-bad" class="hidden min-h-[300px]">${negList}</div><div id="tab-note" class="hidden min-h-[300px]">${noteList}</div>
+
+                    <!-- TABS WITH NOTIFICATION -->
+                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl">
+                        <button onclick="setTab('good')" id="btn-good" class="tab-btn tab-active-good">Positif</button>
+                        <button onclick="setTab('bad')" id="btn-bad" class="tab-btn tab-inactive">Negatif</button>
+                        <button onclick="setTab('note')" id="btn-note" class="tab-btn tab-inactive relative">
+                            Pesan ${noteBadge}
+                        </button>
+                    </div>
+
+                    <div id="tab-good" class="min-h-[300px]">${posList}</div>
+                    <div id="tab-bad" class="hidden min-h-[300px]">${negList}</div>
+                    <div id="tab-note" class="hidden min-h-[300px]">${noteList}</div>
+                    
                     <button onclick="renderStudentLogin()" class="w-full mt-6 py-3 text-red-400 font-bold border border-red-200 rounded-lg">Keluar</button>
                 </div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
-        function updateStudentPhoto(nis) { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = async (e) => { const file = e.target.files[0]; if(file) { Swal.fire({title: 'Mengupload...', didOpen: () => Swal.showLoading()}); const photoBase64 = await compressImage(file); const idx = students.findIndex(s => String(s.nis) === String(nis)); if(idx !== -1) { students[idx].studentPhoto = photoBase64; saveData(); Swal.close(); renderStudentDashboard(students[idx]); } } }; input.click(); }
+        function updateStudentPhoto(nis) { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = async (e) => { const file = e.target.files[0]; if(file) { Swal.fire({title: 'Mengupload Foto...', didOpen: () => Swal.showLoading()}); const photoBase64 = await compressImage(file); const idx = students.findIndex(s => String(s.nis) === String(nis)); if(idx !== -1) { students[idx].studentPhoto = photoBase64; saveData(); Swal.close(); renderStudentDashboard(students[idx]); } } }; input.click(); }
+        function updateStudentCover(nis) { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = async (e) => { const file = e.target.files[0]; if(file) { Swal.fire({title: 'Mengupload Sampul...', didOpen: () => Swal.showLoading()}); const coverBase64 = await compressCover(file); const idx = students.findIndex(s => String(s.nis) === String(nis)); if(idx !== -1) { students[idx].studentCover = coverBase64; saveData(); Swal.close(); renderStudentDashboard(students[idx]); } } }; input.click(); }
+        
+        function compressCover(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); const maxWidth = 500; const scaleSize = maxWidth / img.width; canvas.width = maxWidth; canvas.height = img.height * scaleSize; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve(canvas.toDataURL('image/jpeg', 0.5)); }; img.onerror = (err) => reject(err); }; reader.onerror = (err) => reject(err); }); }
 
         // --- UTILS ---
-        function renderAddStudent() { currentScreen = 'add_student'; const html = `<div class="pt-10 px-6 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><div class="mb-4 text-right"><button onclick="triggerImport()" class="bg-green-600 text-white px-3 py-1 rounded text-xs font-bold"><i class="fas fa-file-excel mr-1"></i> Import Excel</button><button onclick="downloadTemplate()" class="bg-gray-500 text-white px-3 py-1 rounded text-xs font-bold ml-2"><i class="fas fa-download mr-1"></i> Template</button><input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none" onchange="processExcel(event)"></div><form onsubmit="handleAddSubmit(event)" class="space-y-3"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div><input type="date" name="dob" class="w-full p-3 border rounded"><div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div><input type="file" id="photoInput" class="w-full p-2 bg-white rounded border"><button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button></form><button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button></div>`; document.getElementById('appContent').innerHTML = html; }
-        function handleAddSubmit(e) { e.preventDefault(); const btn = document.getElementById('btnSimpanSiswa'); btn.disabled = true; btn.innerText = "Menyimpan..."; const f = e.target; const newNIS = String(f.nis.value).trim(); if(students.find(s => String(s.nis).trim() === newNIS)) { btn.disabled = false; btn.innerText = "Simpan"; return Swal.fire('Gagal', 'NIS sudah ada', 'error'); } const photoInput = document.getElementById('photoInput'); const saveProcess = (photo) => { students.push({ name: f.name.value, nis: f.nis.value, kelas: f.kelas.value, dob: f.dob.value, address: "", photo: photo, studentPhoto: "" }); saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); }; if(photoInput.files[0]) { compressImage(photoInput.files[0]).then(res => saveProcess(res)).catch(() => saveProcess("")); } else { saveProcess(""); } }
+        function renderAddStudent() { currentScreen = 'add_student'; const html = `<div class="pt-10 px-6 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><div class="mb-4 text-right"><button onclick="triggerImport()" class="bg-green-600 text-white px-3 py-1 rounded text-xs font-bold"><i class="fas fa-file-excel mr-1"></i> Import Excel</button><button onclick="downloadTemplate()" class="bg-gray-500 text-white px-3 py-1 rounded text-xs font-bold ml-2"><i class="fas fa-download mr-1"></i> Template</button><input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none" onchange="processExcel(event)"></div><form onsubmit="handleAddSubmit(event)" class="space-y-3"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><div class="text-sm text-gray-600 font-bold mt-2">Tanggal Lahir</div><input type="date" name="dob" class="w-full p-3 border rounded"><textarea name="address" placeholder="Alamat Lengkap" class="w-full p-3 border rounded" rows="2"></textarea><div class="text-sm text-gray-600 font-bold mt-2">Foto Siswa</div><input type="file" id="photoInput" class="w-full p-2 bg-white rounded border"><button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold mt-4 text-white">Simpan</button></form><button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button></div>`; document.getElementById('appContent').innerHTML = html; }
+        function handleAddSubmit(e) { e.preventDefault(); const btn = document.getElementById('btnSimpanSiswa'); btn.disabled = true; btn.innerText = "Menyimpan..."; const f = e.target; const newNIS = String(f.nis.value).trim(); if(students.find(s => String(s.nis).trim() === newNIS)) { btn.disabled = false; btn.innerText = "Simpan"; return Swal.fire('Gagal', 'NIS sudah ada', 'error'); } const photoInput = document.getElementById('photoInput'); const saveProcess = (photo) => { students.push({ name: f.name.value, nis: f.nis.value, kelas: f.kelas.value, dob: f.dob.value, address: "", photo: photo, studentPhoto: "", studentCover: "" }); saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); }; if(photoInput.files[0]) { compressImage(photoInput.files[0]).then(res => saveProcess(res)).catch(() => saveProcess("")); } else { saveProcess(""); } }
         function renderManageBehaviors() { currentScreen = 'manage_behaviors'; const sorted = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1)); let list = ''; sorted.forEach((b) => { const clr = b.type === 'plus' ? 'item-good' : 'item-bad'; const idx = behaviors.findIndex(x => x.id === b.id); list += `<div class="list-item-card ${clr} mb-2"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="font-bold text-sm text-gray-700">${b.label}</span></div><div class="flex items-center gap-2"><span class="point-badge">${b.points}</span><button onclick="delBehavior(${idx})" class="text-gray-400 hover:text-red-500"><i class="fas fa-trash"></i></button></div></div>`; }); const html = `<div class="pt-20 px-6 pb-10"><h2 class="text-xl font-bold mb-4">Atur Poin</h2><div class="space-y-1 mb-4">${list}</div><button onclick="addNewBehaviorPrompt()" class="btn-3d btn-blue w-full py-3 rounded-lg mb-4">Tambah Item Baru</button><button onclick="renderTeacherDashboard()" class="w-full py-3 border rounded text-gray-500">Kembali</button></div>`; document.getElementById('appContent').innerHTML = html; }
         function addNewBehaviorPrompt() { Swal.fire({ title: 'Tambah', html: `<input id="l" class="swal2-input" placeholder="Nama"><input id="p" type="number" class="swal2-input" placeholder="Poin"><select id="t" class="swal2-input"><option value="plus">Positif</option><option value="minus">Negatif</option></select>`, preConfirm: () => { const l = document.getElementById('l').value; let p = parseInt(document.getElementById('p').value); const t = document.getElementById('t').value; if(!l || !p) return; p = Math.abs(p); if(t === 'minus') p = -p; behaviors.push({id: Date.now(), label: l, points: p, type: t, icon: 'fa-star'}); saveData(); renderManageBehaviors(); } }); }
         function delBehavior(idx) { behaviors.splice(idx, 1); saveData(); renderManageBehaviors(); }
         function deleteStudent(nis) { Swal.fire({ title: 'Hapus?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya' }).then(r => { if(r.isConfirmed) { students = students.filter(s => String(s.nis) !== String(nis)); logs = logs.filter(l => String(l.studentId) !== String(nis)); saveData(); renderTeacherDashboard(); } }); }
-        function renderEditStudent(nis) { currentScreen = 'edit_student'; const s = students.find(x => String(x.nis) === String(nis)); if (!s) return; const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${s.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700">NIS</label><input type="text" value="${s.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div><div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${s.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700">Tanggal Lahir</label><input type="date" name="dob" value="${cleanDateForInput(s.dob)}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div><button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold text-white">UPDATE</button><button type="button" onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button></form></div>`; document.getElementById('appContent').innerHTML = html; }
-        async function handleUpdateStudent(e, oldNis) { e.preventDefault(); const f = e.target; const idx = students.findIndex(s => String(s.nis) === String(oldNis)); if (idx === -1) return; const save = (p) => { students[idx] = { ...students[idx], name: f.name.value, kelas: f.kelas.value, dob: f.dob.value, address: "", photo: p }; saveData(); Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetail(oldNis)); }; const file = document.getElementById('photoInputEdit').files[0]; if (file) { compressImage(file).then(res => save(res)).catch(() => save("")); } else { save(students[idx].photo); } }
+        function renderEditStudent(nis) { currentScreen = 'edit_student'; const s = students.find(x => String(x.nis) === String(nis)); if (!s) return; const html = `<div class="pt-20 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold text-gray-800 mb-6">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><div><label class="block text-sm font-bold text-gray-700">Nama</label><input type="text" name="name" value="${s.name}" required class="w-full p-3 rounded-lg border border-gray-300"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-bold text-gray-700">NIS</label><input type="text" value="${s.nis}" disabled class="w-full p-3 rounded-lg bg-gray-100 border"></div><div><label class="block text-sm font-bold text-gray-700">Kelas</label><input type="text" name="kelas" value="${s.kelas}" class="w-full p-3 rounded-lg border border-gray-300"></div></div><div><label class="block text-sm font-bold text-gray-700">Tanggal Lahir</label><input type="date" name="dob" value="${cleanDateForInput(s.dob)}" class="w-full p-3 rounded-lg border border-gray-300"></div><div><label class="block text-sm font-bold text-gray-700">Alamat</label><textarea name="address" class="w-full p-3 rounded-lg border border-gray-300">${s.address}</textarea></div><div><label class="block text-sm font-bold text-gray-700">Foto Baru</label><input type="file" id="photoInputEdit" class="w-full p-2 bg-white rounded border"></div><button class="btn-3d btn-yellow w-full mt-6 py-3 rounded-xl font-bold text-white">UPDATE</button><button type="button" onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 font-bold text-gray-500">Batal</button></form></div>`; document.getElementById('appContent').innerHTML = html; }
+        async function handleUpdateStudent(e, oldNis) { e.preventDefault(); const f = e.target; const idx = students.findIndex(s => String(s.nis) === String(oldNis)); if (idx === -1) return; const save = (p) => { students[idx] = { ...students[idx], name: f.name.value, kelas: f.kelas.value, dob: f.dob.value, photo: p }; saveData(); Swal.fire('Sukses', 'Data diupdate', 'success').then(() => renderStudentDetail(oldNis)); }; const file = document.getElementById('photoInputEdit').files[0]; if (file) { compressImage(file).then(res => save(res)).catch(() => save("")); } else { save(students[idx].photo); } }
         function renderSetup() { currentScreen = 'setup'; const html = `<div class="pt-20 px-6 fade-in pb-10"><h2 class="text-2xl font-bold text-gray-800 mb-4">Pengaturan</h2><div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4"><h3 class="font-bold text-blue-800 mb-2">Sinkronisasi Spreadsheet</h3><input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (akhiran /exec)" class="w-full p-2 text-sm rounded border mb-2"><div class="flex gap-2"><button onclick="checkConnectionAndSave(document.querySelector('#apiUrlInput').value)" class="flex-1 btn-3d btn-blue px-2 py-2 rounded-lg text-sm font-bold">Simpan & Test</button></div><button onclick="copyShareLink()" class="w-full btn-3d btn-orange px-2 py-2 rounded-lg text-sm font-bold mt-2"><i class="fas fa-share-alt mr-2"></i> Salin Link Untuk Siswa</button></div><div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4"><h3 class="font-bold text-gray-700 mb-2">Backup Manual</h3><div class="flex gap-2"><button onclick="downloadBackup()" class="flex-1 btn-3d btn-green py-2 rounded-lg text-xs font-bold">Download</button><button onclick="triggerRestore()" class="flex-1 btn-3d btn-orange py-2 rounded-lg text-xs font-bold">Upload</button><input type="file" id="restoreInput" style="display:none" onchange="handleRestore(event)"></div></div><div class="space-y-3"><div><label class="block text-sm font-bold">Nama Sekolah</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-2 border rounded"></div><div><label class="block text-sm font-bold">Lokasi</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-2 border rounded"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl mt-2 font-bold text-white">Simpan Profil</button></div><div class="mt-8 border-t pt-4"><button onclick="resetAll()" class="w-full py-3 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div></div>`; document.getElementById('appContent').innerHTML = html; }
         function checkConnectionAndSave(url) { if(!url) return Swal.fire('Error', 'URL Kosong', 'error'); if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; Swal.fire({ title: 'Menyimpan...', didOpen: () => { Swal.showLoading(); schoolData.apiUrl = url; saveData(); setTimeout(() => { Swal.fire('Terkirim', 'Cek Spreadsheet.', 'success'); document.querySelector('input[name="apiUrl"]').value = url; }, 2000); } }); }
         
@@ -590,23 +650,16 @@
                 const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
                 
                 let added = 0;
-                // Format: A(0)=Nama, B(1)=NIS, C(2)=Kelas, D(3)=TglLahir
                 for(let i=1; i<jsonData.length; i++) {
                     const row = jsonData[i];
                     if(row[0] && row[1]) {
                         const nis = String(row[1]).trim();
                         if(!students.find(s => String(s.nis) === nis)) {
-                            // FIX: Convert Excel Date
                             let dob = row[3];
-                            if (typeof dob === 'number') {
-                                const dateInfo = new Date(Math.round((dob - 25569) * 86400 * 1000));
-                                dob = dateInfo.toISOString().split('T')[0];
-                            } else {
-                                dob = "";
-                            }
+                            if (typeof dob === 'number') { const dateInfo = new Date(Math.round((dob - 25569) * 86400 * 1000)); dob = dateInfo.toISOString().split('T')[0]; } else { dob = ""; }
                             students.push({
                                 name: row[0], nis: nis, kelas: row[2] || "-", 
-                                dob: dob, address: "", photo: "", studentPhoto: ""
+                                dob: dob, address: "", photo: "", studentPhoto: "", studentCover: ""
                             });
                             added++;
                         }
