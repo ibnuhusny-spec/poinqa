@@ -749,7 +749,7 @@
             currentScreen = 'add_student'; 
             tempAddPhoto = ""; // reset temporary foto
             const html = `
-                <div class="pt-6 px-6 fade-in">
+                <div class="pt-6 px-6 fade-in pb-10">
                     <h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2>
                     
                     <!-- Tambah Foto Siswa -->
@@ -764,13 +764,26 @@
                         </div>
                     </div>
 
-                    <form onsubmit="handleAddSubmit(event)" class="space-y-3">
+                    <form onsubmit="handleAddSubmit(event)" class="space-y-3 mb-6">
                         <input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded">
                         <div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div>
                         <input type="date" name="dob" class="w-full p-3 border rounded">
-                        <button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold text-white">Simpan</button>
+                        <button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold text-white">Simpan Individual</button>
                     </form>
-                    <button onclick="renderTeacherDashboard()" class="w-full mt-4 text-gray-500">Batal</button>
+                    
+                    <!-- Area Import Excel -->
+                    <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
+                        <h3 class="font-bold text-blue-800 mb-2 text-sm"><i class="fas fa-users mr-1"></i> Tambah Banyak Siswa</h3>
+                        <p class="text-xs text-gray-600 mb-3">Gunakan file Excel untuk memasukkan banyak data siswa sekaligus.</p>
+                        <button type="button" onclick="document.getElementById('excelInput').click()" class="btn-3d btn-blue w-full py-2 rounded-lg font-bold text-white text-sm mb-3">
+                            <i class="fas fa-file-excel mr-2"></i> Import dari Excel
+                        </button>
+                        <div class="text-center">
+                            <button type="button" onclick="downloadTemplate()" class="text-xs text-blue-600 font-bold hover:underline"><i class="fas fa-download mr-1"></i> Download Template Excel</button>
+                        </div>
+                    </div>
+
+                    <button onclick="renderTeacherDashboard()" class="w-full py-3 text-gray-500 font-bold border border-gray-200 rounded-lg hover:bg-gray-50">Batal / Kembali</button>
                 </div>`; 
             document.getElementById('appContent').innerHTML = html; 
         }
@@ -886,6 +899,19 @@
                 saveData(); Swal.fire('Selesai', 'Diimpor.', 'success').then(() => renderTeacherDashboard());
             }; reader.readAsArrayBuffer(file); document.getElementById('excelInput').value = "";
         }
+        
+        function downloadTemplate() {
+            const wb = XLSX.utils.book_new();
+            const wsData = [
+                ["Nama Lengkap", "NIS", "Kelas"],
+                ["Budi Santoso", "1001", "1A"],
+                ["Siti Aminah", "1002", "1A"]
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            XLSX.utils.book_append_sheet(wb, ws, "TemplateSiswa");
+            XLSX.writeFile(wb, "Template_Import_Siswa.xlsx");
+        }
+
         function downloadBackup() { 
             const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors})); 
             a.download = "Backup_Poin.json"; document.body.appendChild(a); a.click(); a.remove(); 
