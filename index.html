@@ -192,20 +192,17 @@
             const params = new URLSearchParams(window.location.search);
             const apiLink = params.get('api');
             const schoolName = params.get('school'); 
-            const mode = params.get('mode');
-
+            
             if (apiLink && apiLink !== schoolData.apiUrl) schoolData.apiUrl = apiLink;
             if (schoolName && schoolName !== schoolData.name) schoolData.name = decodeURIComponent(schoolName);
             
             if (apiLink || schoolName) {
                 saveData(true);
+                // Menghilangkan parameter dari URL agar lebih bersih
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
 
-            if (mode === 'student') {
-                setTimeout(() => { renderStudentLogin(); if(schoolData.apiUrl) loadFromCloud(false); }, 100);
-                return true; 
-            }
+            // Selalu merender ke splash screen, sehingga murid bisa memastikan info sekolah/kelas.
             return false;
         }
 
@@ -220,21 +217,16 @@
 
         function shutdownApp() {
             Swal.fire({
-                title: 'Tutup Aplikasi?',
-                text: "Anda akan keluar dari aplikasi ini.",
+                title: 'Keluar Aplikasi?',
+                text: "Anda akan kembali ke layar utama (Splash Screen).",
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
                 cancelButtonColor: '#3085d6',
-                confirmButtonText: 'Ya, Tutup!'
+                confirmButtonText: 'Ya, Keluar!'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    document.body.innerHTML = `
-                        <div class="h-screen w-full flex flex-col items-center justify-center bg-gray-900 text-white">
-                            <i class="fas fa-power-off text-6xl mb-4 text-red-500 animate-pulse"></i>
-                            <h1 class="text-2xl font-bold">Aplikasi Ditutup</h1>
-                            <p class="text-gray-400 mt-2 text-sm">Silakan tutup tab atau tekan tombol home perangkat Anda.</p>
-                        </div>`;
+                    renderSplash();
                 }
             });
         }
