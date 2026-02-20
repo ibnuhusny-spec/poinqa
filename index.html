@@ -157,7 +157,7 @@
 
     <script>
         // --- DATA DEFAULT ---
-        const defaultSchoolData = { name: "SDIT Qurratu A'yun Al-Islami", location: "Kabupaten Maros", logo: "logo.png", apiUrl: "" };
+        const defaultSchoolData = { name: "Kelas 1A", location: "SDIT Qurratu A'yun Al-Islami", logo: "logo.png", apiUrl: "" };
         const initialBehaviors = [
             { id: 1, type: 'plus', label: 'Sholat Dhuha', points: 5, icon: 'fa-person-praying' }, 
             { id: 2, type: 'plus', label: 'Membantu Teman', points: 3, icon: 'fa-hand-holding-heart' },
@@ -169,7 +169,7 @@
 
         let schoolData, students, logs, behaviors;
         let currentScreen = 'splash';
-        let tempAddPhoto = ""; // Global variable for Add Student Photo
+        let tempAddPhoto = ""; 
 
         // --- INISIALISASI ---
         try {
@@ -192,17 +192,21 @@
             const params = new URLSearchParams(window.location.search);
             const apiLink = params.get('api');
             const schoolName = params.get('school'); 
+            const schoolLoc = params.get('loc'); // Menangkap parameter lokasi/sekolah
             
-            if (apiLink && apiLink !== schoolData.apiUrl) schoolData.apiUrl = apiLink;
-            if (schoolName && schoolName !== schoolData.name) schoolData.name = decodeURIComponent(schoolName);
+            let isUpdated = false;
+
+            if (apiLink && apiLink !== schoolData.apiUrl) { schoolData.apiUrl = apiLink; isUpdated = true; }
+            if (schoolName && schoolName !== schoolData.name) { schoolData.name = decodeURIComponent(schoolName); isUpdated = true; }
+            if (schoolLoc && schoolLoc !== schoolData.location) { schoolData.location = decodeURIComponent(schoolLoc); isUpdated = true; }
             
-            if (apiLink || schoolName) {
+            if (isUpdated) {
                 saveData(true);
                 // Menghilangkan parameter dari URL agar lebih bersih
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
 
-            // Selalu merender ke splash screen, sehingga murid bisa memastikan info sekolah/kelas.
+            // Selalu merender ke splash screen agar murid bisa lihat nama kelas & sekolah barunya
             return false;
         }
 
@@ -218,16 +222,14 @@
         function shutdownApp() {
             Swal.fire({
                 title: 'Keluar Aplikasi?',
-                text: "Anda akan kembali ke layar utama (Splash Screen).",
+                text: "Anda akan kembali ke layar utama.",
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
                 cancelButtonColor: '#3085d6',
                 confirmButtonText: 'Ya, Keluar!'
             }).then((result) => {
-                if (result.isConfirmed) {
-                    renderSplash();
-                }
+                if (result.isConfirmed) renderSplash();
             });
         }
 
@@ -250,7 +252,6 @@
             if(!schoolData.apiUrl) return; 
             clearTimeout(debounceTimer); updateSyncUI('loading');
             
-            // Hapus foto agar payload tidak terlalu besar saat sync
             const lightStudents = students.map(s => { 
                 const { photo, studentPhoto, teacherCoverPhoto, studentCoverPhoto, ...sisa } = s; 
                 return sisa; 
@@ -275,7 +276,6 @@
             .then(data => {
                 if(isManual) Swal.close();
                 if(data.students && Array.isArray(data.students)) {
-                    // Gabungkan data cloud dengan 4 jenis foto lokal yang terpisah
                     students = data.students.map(cloudS => {
                         const localS = students.find(l => String(l.nis) === String(cloudS.nis));
                         return { 
@@ -440,7 +440,6 @@
             const negPoints = studentLogs.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0);
             const totalPoints = posPoints + negPoints;
 
-            // Memanjang kebawah (List) untuk tombol poin
             const sortedBehaviors = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1));
             const goodButtons = sortedBehaviors.filter(b => b.type === 'plus').map(b => 
                 `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good">
@@ -458,7 +457,6 @@
                 </button>`
             ).join('');
             
-            // Riwayat
             let filteredHistory = activeTab === 'good' ? studentLogs.filter(l => l.points > 0) : (activeTab === 'bad' ? studentLogs.filter(l => l.points < 0) : studentLogs.filter(l => l.note));
             filteredHistory.sort((a,b)=>b.id-a.id);
             
@@ -471,7 +469,6 @@
                     <button onclick="deleteLog(${l.id}, '${nis}', '${activeTab}')" class="text-gray-400 hover:text-red-500 px-2"><i class="fas fa-trash"></i></button></div>
                 </div>`).join('') || '<div class="text-center text-xs text-gray-400 py-2">Belum ada riwayat.</div>';
             
-            // Foto Guru Khusus
             const displayPhoto = student.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png';
             const displayCover = student.teacherCoverPhoto || 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=600&q=80';
 
@@ -519,7 +516,7 @@
                         <div class="bg-gray-50 rounded p-2 max-h-40 overflow-y-auto shadow-inner">${historyList}</div>
                     </div>
                     
-                    <!-- Area Tombol Aksi Memanjang -->
+                    <!-- Area Tombol Aksi -->
                     <div class="${activeTab==='good'?'block':'hidden'}"><div class="flex flex-col">${goodButtons}</div></div>
                     <div class="${activeTab==='bad'?'block':'hidden'}"><div class="flex flex-col">${badButtons}</div></div>
                     <div class="${activeTab==='note'?'block':'hidden'}">
@@ -593,7 +590,6 @@
             const negPoints = myLogs.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0);
             const totalPoints = posPoints + negPoints;
 
-            // Logika Notifikasi Tab Catatan
             const notes = myLogs.filter(l => l.note);
             const latestNote = notes.length > 0 ? notes[0] : null;
             let hasNewNote = false;
@@ -602,7 +598,6 @@
                 if (!lastRead || new Date(latestNote.date) > new Date(lastRead)) hasNewNote = true;
             }
 
-            // Foto Khusus Murid
             const displayPhoto = s.studentPhoto || 'https://cdn-icons-png.flaticon.com/512/194/194938.png';
             const displayCover = s.studentCoverPhoto || 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=600&q=80';
 
@@ -638,7 +633,7 @@
                         </div>
                     </div>
                     
-                    <!-- Tab Menu dengan Badge Notifikasi Pulse -->
+                    <!-- Tab Menu -->
                     <div class="flex mb-4 bg-gray-100 p-1 rounded-xl shadow-inner relative">
                         <button onclick="setTab('good')" id="btn-good" class="tab-btn tab-active-good">Positif</button>
                         <button onclick="setTab('bad')" id="btn-bad" class="tab-btn tab-inactive">Negatif</button>
@@ -670,7 +665,6 @@
             }
         }
 
-        // Fungsi Global Update Image terpisahkan antara jenis Guru & Murid
         window.updateImage = function(nis, type) { 
             const input = document.createElement('input'); 
             input.type = 'file'; input.accept = 'image/*'; 
@@ -717,9 +711,13 @@
                         </div>
                     </div>
                     <div class="space-y-3">
+                        <label class="text-xs font-bold text-gray-500 uppercase">Nama Kelas (Tampil Besar)</label>
                         <input type="text" id="sName" value="${schoolData.name}" class="w-full p-3 border rounded font-bold">
+                        
+                        <label class="text-xs font-bold text-gray-500 uppercase mt-2 block">Nama Sekolah (Tampil Kecil)</label>
                         <input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-3 border rounded">
-                        <button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl font-bold text-white">Simpan Profil</button>
+                        
+                        <button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl font-bold text-white mt-4">Simpan Profil</button>
                     </div>
                     <button onclick="resetAll()" class="w-full py-3 mt-8 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button>
                 </div>`; 
@@ -729,10 +727,11 @@
         function copyShareLink() { 
             if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting', 'error'); 
             const baseUrl = window.location.href.split('?')[0]; 
-            const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}&mode=student`; 
+            // PARAMETER LOKASI (loc) DITAMBAHKAN DI SINI
+            const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&mode=student`; 
             const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); 
             el.select(); document.execCommand('copy'); document.body.removeChild(el); 
-            Swal.fire({ title: 'Link Tersalin!', html: 'Bagikan ke siswa, saat diklik akan otomatis masuk ke login murid dan sync data.', icon: 'success' }); 
+            Swal.fire({ title: 'Link Tersalin!', html: 'Bagikan ke siswa, saat diklik akan otomatis masuk ke menu murid dan mensinkronkan Nama Kelas dan Nama Sekolah.', icon: 'success' }); 
         }
 
         function checkConnectionAndSave(url) { 
@@ -747,12 +746,11 @@
         // --- CRUD SISWA ---
         function renderAddStudent() { 
             currentScreen = 'add_student'; 
-            tempAddPhoto = ""; // reset temporary foto
+            tempAddPhoto = ""; 
             const html = `
                 <div class="pt-6 px-6 fade-in pb-10">
                     <h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2>
                     
-                    <!-- Tambah Foto Siswa -->
                     <div class="flex justify-center mb-6">
                         <div class="relative w-24 h-24">
                             <div class="w-full h-full bg-gray-200 rounded-full overflow-hidden border-4 border-white shadow flex items-center justify-center text-gray-400">
@@ -771,7 +769,6 @@
                         <button type="submit" id="btnSimpanSiswa" class="btn-3d btn-green w-full py-3 rounded-lg font-bold text-white">Simpan Individual</button>
                     </form>
                     
-                    <!-- Area Import Excel -->
                     <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
                         <h3 class="font-bold text-blue-800 mb-2 text-sm"><i class="fas fa-users mr-1"></i> Tambah Banyak Siswa</h3>
                         <p class="text-xs text-gray-600 mb-3">Gunakan file Excel untuk memasukkan banyak data siswa sekaligus.</p>
@@ -804,17 +801,9 @@
             e.preventDefault(); const f = e.target; const newNIS = String(f.nis.value).trim(); 
             if(students.find(s => String(s.nis).trim() === newNIS)) return Swal.fire('Gagal', 'NIS sudah ada', 'error'); 
             
-            // Simpan data, foto dari guru ini tidak tersinkron ke murid
             students.push({ 
-                name: f.name.value, 
-                nis: f.nis.value, 
-                kelas: f.kelas.value, 
-                dob: f.dob.value, 
-                address: "", 
-                photo: tempAddPhoto, 
-                studentPhoto: "", 
-                teacherCoverPhoto: "", 
-                studentCoverPhoto: "" 
+                name: f.name.value, nis: f.nis.value, kelas: f.kelas.value, dob: f.dob.value, 
+                address: "", photo: tempAddPhoto, studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" 
             }); 
             
             saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); 
