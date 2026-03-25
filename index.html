@@ -1123,30 +1123,122 @@
         function delBehavior(idx) { behaviors.splice(idx, 1); saveData(); renderManageBehaviors(); }
 
         // EXCEL EXPORT & IMPORT & BACKUP
-        function exportToExcel() { 
-            if(students.length===0) return Swal.fire('Info', 'Data siswa kosong', 'info'); 
+        async function exportToExcel() { 
+            if(students.length === 0) return Swal.fire('Info', 'Data siswa kosong', 'info'); 
             
-            const exportData = students.map(s => {
+            Swal.fire({title: 'Menyiapkan Dokumen...', html: 'Mendesain warna dan tabel Excel', didOpen: () => Swal.showLoading()});
+            
+            // Muat library pembuat Excel berwarna (ExcelJS) secara otomatis
+            if (typeof ExcelJS === 'undefined') {
+                await new Promise((resolve) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
+                    script.onload = resolve;
+                    document.head.appendChild(script);
+                });
+            }
+
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Rekap Poin');
+
+            // 1. KOP SURAT (Header)
+            worksheet.mergeCells('A1:H1');
+            worksheet.getCell('A1').value = `DAFTAR AKUMULASI POIN KELAS ${schoolData.name.toUpperCase()}`;
+            worksheet.getCell('A1').font = { size: 16, bold: true, color: { argb: 'FF1E3A8A' } }; // Biru Tua
+            worksheet.getCell('A1').alignment = { horizontal: 'center' };
+
+            worksheet.mergeCells('A2:H2');
+            worksheet.getCell('A2').value = `SDIT QURRATU A'YUN AL-ISLAMI`;
+            worksheet.getCell('A2').font = { size: 14, bold: true, color: { argb: 'FF15803D' } }; // Hijau Tua
+            worksheet.getCell('A2').alignment = { horizontal: 'center' };
+
+            worksheet.mergeCells('A3:H3');
+            worksheet.getCell('A3').value = `KABUPATEN MAROS`;
+            worksheet.getCell('A3').font = { size: 12, bold: true };
+            worksheet.getCell('A3').alignment = { horizontal: 'center' };
+
+            worksheet.addRow([]); // Baris kosong sebagai pembatas
+
+            // 2. HEADER TABEL DENGAN WARNA
+            const headerRow = worksheet.addRow(['No', 'NIS', 'Nama Lengkap Siswa', 'Kelas', 'Tanggal Lahir', 'Total Positif', 'Total Negatif', 'Poin Akhir']);
+            headerRow.eachCell((cell) => {
+                cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; // Tulisan Putih
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } }; // Latar Biru
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+            });
+
+            // 3. ISI DATA SISWA & REKAP POIN
+            students.forEach((s, idx) => {
                 const studentLogs = logs.filter(l => String(l.studentId) === String(s.nis));
                 const posPoints = studentLogs.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0);
                 const negPoints = studentLogs.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0);
                 const totalPoints = posPoints + negPoints;
                 
-                return {
-                    "NIS": s.nis,
-                    "Nama Siswa": s.name,
-                    "Kelas": s.kelas,
-                    "Tanggal Lahir": s.dob ? new Date(s.dob).toLocaleDateString('id-ID') : "-",
-                    "Total Positif": posPoints,
-                    "Total Negatif": negPoints,
-                    "Poin Akhir (Akumulasi)": totalPoints
-                };
+                const row = worksheet.addRow([
+                    idx + 1,
+                    s.nis,
+                    s.name,
+                    s.kelas,
+                    s.dob ? new Date(s.dob).toLocaleDateString('id-ID') : "-",
+                    `+${posPoints}`,
+                    negPoints,
+                    totalPoints
+                ]);
+
+                // Atur bingkai, tata letak, dan warna baris poin
+                row.eachCell((cell, colNumber) => {
+                    cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                    cell.alignment = { vertical: 'middle' };
+                    
+                    if ([1, 2, 4, 5].includes(colNumber)) { // Rata Tengah untuk No, NIS, Kelas, TTL
+                        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    }
+                    
+                    // Warna Spesial untuk Poin
+                    if (colNumber === 6) { // Positif (Hijau)
+                        cell.font = { color: { argb: 'FF166534' }, bold: true };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+                        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    }
+                    if (colNumber === 7) { // Negatif (Merah)
+                        cell.font = { color: { argb: 'FF991B1B' }, bold: true };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+                        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    }
+                    if (colNumber === 8) { // Poin Akhir (Kuning Emas)
+                        cell.font = { color: { argb: 'FF854D0E' }, bold: true, size: 12 };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF08A' } };
+                        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    }
+                });
             });
 
-            const wb = XLSX.utils.book_new(); 
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportData), "Rekap Poin"); 
-            XLSX.writeFile(wb, "Rekap_Poin_Siswa.xlsx"); 
+            // 4. ATUR LEBAR KOLOM AGAR RAPI
+            worksheet.getColumn(1).width = 5;  // No
+            worksheet.getColumn(2).width = 15; // NIS
+            worksheet.getColumn(3).width = 30; // Nama
+            worksheet.getColumn(4).width = 10; // Kelas
+            worksheet.getColumn(5).width = 18; // Tanggal Lahir
+            worksheet.getColumn(6).width = 15; // Total Positif
+            worksheet.getColumn(7).width = 15; // Total Negatif
+            worksheet.getColumn(8).width = 15; // Poin Akhir
+
+            // Hasilkan dan Unduh File
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Rekap_Poin_${schoolData.name.replace(/\s+/g, '_')}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            Swal.close();
         }
+        
         function processExcel(e) {
             const file = e.target.files[0]; if(!file) return;
             const reader = new FileReader();
