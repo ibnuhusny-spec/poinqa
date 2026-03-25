@@ -928,7 +928,7 @@
             // Penentuan Tombol Keluar (Logout)
             const isLocked = localStorage.getItem('lockedStudentNis') === String(s.nis);
             const logoutBtnHTML = isLocked 
-                ? `<button onclick="logoutLocked()" class="w-full mt-6 py-3 text-gray-500 font-bold border border-gray-300 rounded-lg hover:bg-gray-100 transition"><i class="fas fa-sign-out-alt mr-1"></i> Hapus Akses Perangkat</button>`
+                ? `<button onclick="logoutLocked()" class="w-full mt-6 py-3 text-gray-500 font-bold border border-gray-300 rounded-lg hover:bg-gray-100 transition"><i class="fas fa-exchange-alt mr-1"></i> Keluar / Ganti Profil Saudara</button>`
                 : `<button onclick="renderStudentLogin()" class="w-full mt-6 py-3 text-red-400 font-bold border border-red-200 rounded-lg hover:bg-red-50 transition">Keluar Akun</button>`;
 
             const html = `
@@ -987,12 +987,12 @@
 
         window.logoutLocked = function() {
             Swal.fire({
-                title: 'Hapus Akses?',
-                text: 'Aplikasi akan mengunci dan melupakan profil anak Anda dari HP ini. Anda akan membutuhkan Link Akses Pribadi dari guru lagi untuk bisa masuk.',
-                icon: 'warning',
+                title: 'Keluar Profil?',
+                text: 'Anda akan keluar dari profil ini. Untuk berganti ke profil anak Anda yang lain (saudaranya), silakan buka WhatsApp dan klik Link Akses Pribadi miliknya.',
+                icon: 'question',
                 showCancelButton: true,
-                confirmButtonColor: '#d33',
-                confirmButtonText: 'Ya, Hapus Akses'
+                confirmButtonColor: '#3b82f6',
+                confirmButtonText: 'Ya, Keluar'
             }).then((r) => {
                 if(r.isConfirmed) {
                     localStorage.removeItem('lockedStudentNis');
