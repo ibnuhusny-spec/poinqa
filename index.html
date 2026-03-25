@@ -208,7 +208,7 @@
             salatIDs.forEach(id => {
                 if(!behaviors.find(b => b.id === id)) {
                     const newB = initialBehaviors.find(b => b.id === id);
-                    if(newB) { behaviors.push(newB); isChanged = true; }
+                    if(newB) { behaviors.push({...newB}); isChanged = true; }
                 }
             });
             if(isChanged) localStorage.setItem('behaviors', JSON.stringify(behaviors));
@@ -603,7 +603,7 @@
         }
 
         window.reportSalat = function(nis, bid) {
-            const b = behaviors.find(x => String(x.id) === String(bid));
+            const b = behaviors.find(x => String(x.id) === String(bid)) || initialBehaviors.find(x => String(x.id) === String(bid));
             if(!b) return;
             
             const isPos = b.type === 'plus';
@@ -695,8 +695,8 @@
                 <div class="space-y-3">`;
             
             salatPairs.forEach(pair => {
-                const posB = behaviors.find(x => x.id === pair.posId);
-                const negB = behaviors.find(x => x.id === pair.negId);
+                const posB = behaviors.find(x => x.id === pair.posId) || initialBehaviors.find(x => x.id === pair.posId);
+                const negB = behaviors.find(x => x.id === pair.negId) || initialBehaviors.find(x => x.id === pair.negId);
                 
                 if(!posB || !negB) return;
 
@@ -966,9 +966,11 @@
             const sorted = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1)); 
             let list = sorted.map(b => { 
                 const idx = behaviors.findIndex(x => x.id === b.id); 
+                const isSystem = (b.id >= 101 && b.id <= 106) || (b.id >= 201 && b.id <= 206);
+                const actionBtn = isSystem ? `<span class="text-[10px] text-gray-400 italic px-2">Sistem</span>` : `<button onclick="delBehavior(${idx})" class="text-gray-400 hover:text-red-500 px-2"><i class="fas fa-trash"></i></button>`;
                 return `<div class="list-item-card ${b.type==='plus'?'item-good':'item-bad'} mb-2">
                     <div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="behavior-text">${b.label}</span></div>
-                    <div class="flex items-center gap-2"><span class="point-badge">${b.points}</span><button onclick="delBehavior(${idx})" class="text-gray-400 hover:text-red-500 px-2"><i class="fas fa-trash"></i></button></div>
+                    <div class="flex items-center gap-2"><span class="point-badge">${b.points}</span>${actionBtn}</div>
                 </div>`; 
             }).join(''); 
             
