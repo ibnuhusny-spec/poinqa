@@ -1383,21 +1383,49 @@
                     const r = jsonData[i];
                     if(r[0] && r[1]) {
                         const nis = String(r[1]).trim();
-                        if(!students.find(s => String(s.nis) === nis)) students.push({ name: r[0], nis: nis, kelas: r[2] || "-", dob: "", address: "", photo: "", studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
+                        
+                        // Menangkap kolom ke-4 (Tanggal Lahir)
+                        let dobVal = "";
+                        if(r[3]) {
+                            // Jika Excel mengubahnya jadi angka seri khusus Excel
+                            if(!isNaN(r[3]) && typeof r[3] === 'number') {
+                                let date = new Date((r[3] - 25569) * 86400000);
+                                dobVal = date.toISOString().split('T')[0];
+                            } else {
+                                // Jika ditulis dalam bentuk teks biasa (YYYY-MM-DD)
+                                dobVal = String(r[3]).trim();
+                            }
+                        }
+
+                        if(!students.find(s => String(s.nis) === nis)) {
+                            students.push({ 
+                                name: r[0], 
+                                nis: nis, 
+                                kelas: r[2] || "-", 
+                                dob: dobVal, // Tanggal Lahir dimasukkan ke sini
+                                address: "", photo: "", studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" 
+                            }); 
+                        }
                     }
                 }
-                saveData(); Swal.fire('Selesai', 'Diimpor.', 'success').then(() => renderTeacherDashboard());
-            }; reader.readAsArrayBuffer(file); document.getElementById('excelInput').value = "";
+                saveData(); Swal.fire('Selesai', 'Data siswa berhasil diimpor.', 'success').then(() => renderTeacherDashboard());
+            }; 
+            reader.readAsArrayBuffer(file); 
+            document.getElementById('excelInput').value = "";
         }
         
         function downloadTemplate() {
             const wb = XLSX.utils.book_new();
             const wsData = [
-                ["Nama Lengkap", "NIS", "Kelas"],
-                ["Budi Santoso", "1001", "1A"],
-                ["Siti Aminah", "1002", "1A"]
+                ["Nama Lengkap", "NIS", "Kelas", "Tanggal Lahir (YYYY-MM-DD)"],
+                ["Budi Santoso", "1001", "1A", "2015-05-20"],
+                ["Siti Aminah", "1002", "1A", "2016-08-15"]
             ];
             const ws = XLSX.utils.aoa_to_sheet(wsData);
+            
+            // Atur lebar kolom agar rapi saat didownload
+            ws['!cols'] = [{wch: 30}, {wch: 15}, {wch: 10}, {wch: 30}];
+            
             XLSX.utils.book_append_sheet(wb, ws, "TemplateSiswa");
             XLSX.writeFile(wb, "Template_Import_Siswa.xlsx");
         }
