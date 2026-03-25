@@ -208,6 +208,19 @@
         }
 
         // --- INISIALISASI ---
+        function ensureSystemBehaviors() {
+            const systemIDs = [101, 102, 103, 104, 105, 106, 201, 202, 203, 204, 205, 206];
+            let isChanged = false;
+            systemIDs.forEach(id => {
+                const existingIdx = behaviors.findIndex(b => String(b.id) === String(id));
+                if (existingIdx === -1) {
+                    const newB = initialBehaviors.find(b => String(b.id) === String(id));
+                    if(newB) { behaviors.push({...newB}); isChanged = true; }
+                }
+            });
+            return isChanged;
+        }
+
         try {
             schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
             students = JSON.parse(localStorage.getItem('students')) || [];
@@ -222,16 +235,9 @@
             });
 
             // PERBAIKAN: Memaksa inject sistem salat agar pasti muncul di "Atur Poin"
-            const systemIDs = [101, 102, 103, 104, 105, 106, 201, 202, 203, 204, 205, 206];
-            let isChanged = false;
-            systemIDs.forEach(id => {
-                const existingIdx = behaviors.findIndex(b => b.id === id);
-                if (existingIdx === -1) {
-                    const newB = initialBehaviors.find(b => b.id === id);
-                    if(newB) { behaviors.push({...newB}); isChanged = true; }
-                }
-            });
-            if(isChanged) localStorage.setItem('behaviors', JSON.stringify(behaviors));
+            if (ensureSystemBehaviors()) {
+                localStorage.setItem('behaviors', JSON.stringify(behaviors));
+            }
             
         } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; }
 
@@ -346,11 +352,15 @@
                         };
                     });
                     if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
-                    if(data.behaviors) behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
+                    if(data.behaviors) {
+                        behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
+                        ensureSystemBehaviors(); // Mencegah salat hilang tertimpa data cloud lama
+                    }
                     
                     saveData(true); updateSyncUI('success');
                     if(isManual) Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(() => {
                         if(currentScreen === 'teacher_dashboard') renderTeacherDashboard();
+                        if(currentScreen === 'manage_behaviors') renderManageBehaviors();
                     });
                 }
             }).catch(e => { if(isManual) Swal.fire('Gagal', 'Koneksi error.', 'error'); updateSyncUI('error'); });
