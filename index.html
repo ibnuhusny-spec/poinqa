@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Tambahan ExcelJS untuk Ekspor KOP Berwarna -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
@@ -59,7 +61,7 @@
         .btn-purple { background-color: #8b5cf6 !important; border-color: #6d28d9 !important; } 
         .btn-yellow { background-color: #eab308 !important; border-color: #a16207 !important; }
 
-        /* LIST ITEM STYLES (LONG LIST FORMAT) */
+        /* LIST ITEM STYLES */
         .list-item-card {
             display: flex; align-items: center; justify-content: space-between;
             padding: 12px 16px; margin-bottom: 10px; width: 100%;
@@ -99,7 +101,7 @@
         }
         .tab-active-good { background: #dcfce7; color: #166534; border-color: #22c55e; }
         .tab-active-bad { background: #fee2e2; color: #991b1b; border-color: #ef4444; }
-        .tab-active-salat { background: #ccfbf1; color: #115e59; border-color: #14b8a6; } /* New Tab Color */
+        .tab-active-salat { background: #ccfbf1; color: #115e59; border-color: #14b8a6; } 
         .tab-active-note { background: #dbeafe; color: #1e40af; border-color: #3b82f6; }
         .tab-inactive { background: white; color: #9ca3af; border-color: #e5e7eb; }
 
@@ -194,7 +196,7 @@
         let spamCounter = 0;
         function isSpamDetected() {
             const now = Date.now();
-            if (now - lastActionTime < 1500) { // Jika klik berjarak kurang dari 1.5 detik
+            if (now - lastActionTime < 1500) { 
                 spamCounter++;
                 if (spamCounter >= 3) {
                     Swal.fire('Sistem Keamanan', 'Aktivitas tidak wajar terdeteksi. Harap pelan-pelan.', 'warning');
@@ -227,14 +229,14 @@
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
             
-            // Perbaiki ejaan lama jika sudah terlanjur tersimpan di HP guru
+            // Perbaiki ejaan lama
             behaviors.forEach(b => {
                 if (b.id === 102) b.label = 'Salat Zuhur';
                 if (b.id === 103) b.label = 'Salat Asar';
                 if (b.id === 104) b.label = 'Salat Magrib';
             });
 
-            // PERBAIKAN: Memaksa inject sistem salat agar pasti muncul di "Atur Poin"
+            // Memaksa inject sistem salat
             if (ensureSystemBehaviors()) {
                 localStorage.setItem('behaviors', JSON.stringify(behaviors));
             }
@@ -249,14 +251,22 @@
             if (!skipCloud && schoolData.apiUrl) syncToCloud();
         }
 
-        // --- LINK AJAIB ---
+        // --- LINK AJAIB & MAGIC LINK PERSONAL ---
         function checkAutoConfig() {
             const params = new URLSearchParams(window.location.search);
             const apiLink = params.get('api');
             const schoolName = params.get('school'); 
             const schoolLoc = params.get('loc'); 
+            const mode = params.get('mode');
+            const lockNis = params.get('nis');
             
-            if (params.get('mode') === 'student') isStudentModeOnly = true;
+            // Mode Murid Terkunci (Personal Magic Link)
+            if (mode === 'student_locked' && lockNis) {
+                localStorage.setItem('lockedStudentNis', lockNis);
+                isStudentModeOnly = true;
+            } else if (mode === 'student') {
+                isStudentModeOnly = true;
+            }
 
             let isUpdated = false;
 
@@ -264,15 +274,23 @@
             if (schoolName && schoolName !== schoolData.name) { schoolData.name = decodeURIComponent(schoolName); isUpdated = true; }
             if (schoolLoc && schoolLoc !== schoolData.location) { schoolData.location = decodeURIComponent(schoolLoc); isUpdated = true; }
             
-            if (isUpdated) {
-                saveData(true);
+            if (isUpdated || mode) {
+                if (isUpdated) saveData(true);
+                // Membersihkan URL agar parameter tidak terlihat di browser
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
             return false;
         }
 
         // --- NAVIGATION ---
-        function goHome() { if(currentScreen !== 'splash') { isStudentModeOnly ? renderStudentLogin() : renderModeSelection(); } }
+        function goHome() { 
+            if(currentScreen !== 'splash') { 
+                if (localStorage.getItem('lockedStudentNis')) handleAutoLogin(localStorage.getItem('lockedStudentNis'));
+                else if (isStudentModeOnly) renderStudentLogin();
+                else renderModeSelection(); 
+            } 
+        }
+        
         function goBack() {
             if (['teacher_detail', 'add_student', 'manage_behaviors', 'setup', 'edit_student'].includes(currentScreen)) renderTeacherDashboard(); 
             else if (['teacher_dashboard'].includes(currentScreen)) renderModeSelection(); 
@@ -280,7 +298,10 @@
                 if (isStudentModeOnly) renderSplash();
                 else renderModeSelection();
             }
-            else if (currentScreen === 'student_dashboard') renderStudentLogin(); 
+            else if (currentScreen === 'student_dashboard') {
+                if (localStorage.getItem('lockedStudentNis')) renderSplash(); // Kalau dilock, kembali ke splash
+                else renderStudentLogin(); 
+            }
             else if (currentScreen === 'mode_selection') renderSplash(); 
         }
 
@@ -354,13 +375,17 @@
                     if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
                     if(data.behaviors) {
                         behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
-                        ensureSystemBehaviors(); // Mencegah salat hilang tertimpa data cloud lama
+                        ensureSystemBehaviors(); 
                     }
                     
                     saveData(true); updateSyncUI('success');
                     if(isManual) Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(() => {
                         if(currentScreen === 'teacher_dashboard') renderTeacherDashboard();
                         if(currentScreen === 'manage_behaviors') renderManageBehaviors();
+                        if(currentScreen === 'student_dashboard') {
+                            const lockedNis = localStorage.getItem('lockedStudentNis');
+                            if(lockedNis) handleAutoLogin(lockedNis);
+                        }
                     });
                 }
             }).catch(e => { if(isManual) Swal.fire('Gagal', 'Koneksi error.', 'error'); updateSyncUI('error'); });
@@ -412,6 +437,16 @@
             document.getElementById('bottomStatus').classList.add('hidden'); 
             document.body.style.paddingTop = "0";
             
+            // Penentuan tombol aksi berdasarkan status kunci
+            let lockedNis = localStorage.getItem('lockedStudentNis');
+            let btnAction = "renderModeSelection()";
+            
+            if (lockedNis) {
+                btnAction = `handleAutoLogin('${lockedNis}')`;
+            } else if (isStudentModeOnly) {
+                btnAction = "renderStudentLogin()";
+            }
+            
             const html = `
                 <div class="h-screen w-full flex flex-col items-center justify-center bg-pattern text-center p-6 fade-in">
                     <div class="w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden mb-6 animate-bounce">
@@ -420,7 +455,7 @@
                     <h1 class="text-3xl font-black text-blue-600 mb-2">POINKU PRO</h1>
                     <h2 class="text-xl font-bold text-gray-700 mb-1 leading-tight">${schoolData.name}</h2>
                     <p class="text-md text-gray-500 mb-8">${schoolData.location}</p>
-                    <button onclick="${isStudentModeOnly ? 'renderStudentLogin()' : 'renderModeSelection()'}" class="btn-3d btn-blue w-full max-w-xs py-4 rounded-xl text-xl font-bold">MULAI APLIKASI</button>
+                    <button onclick="${btnAction}" class="btn-3d btn-blue w-full max-w-xs py-4 rounded-xl text-xl font-bold">MULAI APLIKASI</button>
                 </div>`;
             document.getElementById('appContent').innerHTML = html;
         }
@@ -512,7 +547,7 @@
 
             const sortedBehaviors = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1));
             
-            // Sembunyikan tombol salat (ID 101-106 dan 201-206) dari tampilan guru
+            // Sembunyikan tombol salat dari tampilan guru
             const goodButtons = sortedBehaviors.filter(b => b.type === 'plus' && !(b.id >= 101 && b.id <= 106)).map(b => 
                 `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good">
                     <div class="icon-box"><i class="fas ${b.icon}"></i></div>
@@ -547,7 +582,7 @@
             const html = `
                 <div class="px-4 pb-10 fade-in">
                     <!-- Header Cover & 3 Deret Poin -->
-                    <div class="bg-white rounded-xl shadow-lg mb-6 overflow-hidden">
+                    <div class="bg-white rounded-xl shadow-lg mb-4 overflow-hidden">
                         <div class="relative w-full h-24 bg-gray-300">
                             <img src="${displayCover}" class="w-full h-full object-cover">
                             <button onclick="updateImage('${student.nis}', 'teacherCover')" class="absolute top-2 left-2 bg-black/50 text-white rounded-full px-3 py-1 shadow backdrop-blur-sm text-xs hover:bg-black/70"><i class="fas fa-camera mr-1"></i> Ubah Sampul</button>
@@ -576,6 +611,11 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Tombol Akses Pribadi (Baru) -->
+                    <div class="mb-4">
+                        <button onclick="copyPersonalLink('${nis}')" class="w-full bg-blue-50 border border-blue-200 text-blue-600 font-bold py-2.5 rounded-lg text-xs shadow-sm hover:bg-blue-100 transition"><i class="fas fa-link mr-1"></i> Salin Link Akses Orang Tua (Auto-Login)</button>
+                    </div>
                     
                     <!-- Tabs -->
                     <div class="flex mb-4 bg-gray-100 p-1 rounded-xl shadow-inner">
@@ -600,6 +640,22 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
+        window.copyPersonalLink = function(nis) {
+            if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting di Pengaturan', 'error');
+            const baseUrl = window.location.href.split('?')[0];
+            const sName = students.find(s=>String(s.nis)===String(nis)).name;
+            const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&mode=student_locked&nis=${encodeURIComponent(nis)}`;
+            
+            const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el);
+            el.select(); document.execCommand('copy'); document.body.removeChild(el);
+            
+            Swal.fire({ 
+                title: 'Link Tersalin!', 
+                html: `Kirimkan link ini ke WhatsApp orang tua <b>${sName}</b>.<br><br>Saat diklik, mereka akan langsung masuk profil anaknya tanpa perlu mengetik NIS apa pun. Cerdas & Aman!`, 
+                icon: 'success' 
+            });
+        }
+
         window.setTab = function(type, nis = null) {
             if(currentScreen === 'teacher_detail' && nis) renderStudentDetail(nis, type);
             else {
@@ -617,7 +673,7 @@
         }
 
         function addPoint(nis, bid, currentTab) { 
-            if (isSpamDetected()) return; // Proteksi Spam
+            if (isSpamDetected()) return; 
 
             const b = behaviors.find(x => String(x.id) === String(bid)); 
             if(b) { 
@@ -628,9 +684,8 @@
         }
 
         function addNoteOnly(nis) { 
-            if (isSpamDetected()) return; // Proteksi Spam
+            if (isSpamDetected()) return; 
             
-            // Proteksi Spam Catatan: Batasi 10 Detik antar pesan
             const recentNotes = logs.filter(l => String(l.studentId) === String(nis) && l.note);
             if (recentNotes.length > 0) {
                 recentNotes.sort((a,b) => b.id - a.id);
@@ -657,7 +712,7 @@
         }
 
         window.reportSalat = function(nis, bid) {
-            if (isSpamDetected()) return; // Proteksi Spam
+            if (isSpamDetected()) return;
 
             const b = behaviors.find(x => String(x.id) === String(bid)) || initialBehaviors.find(x => String(x.id) === String(bid));
             if(!b) return;
@@ -697,19 +752,27 @@
                     <div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 text-3xl shadow-inner"><i class="fas fa-lock"></i></div>
                     <h2 class="text-2xl font-bold text-gray-800 mb-2">Login Murid</h2>
                     <input id="loginNis" placeholder="Masukkan NIS" class="w-full p-4 border rounded text-center text-xl mb-4 shadow">
-                    <button onclick="handleLogin()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white shadow-lg">MASUK & LAPOR SALAT</button>
+                    <button onclick="handleLoginManual()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white shadow-lg">MASUK & LAPOR SALAT</button>
                 </div>`; 
             document.getElementById('appContent').innerHTML = html; 
         }
 
-        function handleLogin() { 
+        function handleLoginManual() {
             const nis = document.getElementById('loginNis').value.trim(); 
-            const s = students.find(x => String(x.nis).trim() === nis); 
+            handleAutoLogin(nis);
+        }
+
+        window.handleAutoLogin = function(nis) { 
+            const s = students.find(x => String(x.nis).trim() === String(nis).trim()); 
             if(s) renderStudentDashboard(s); 
             else { 
                 if(schoolData.apiUrl) { 
-                    Swal.fire({ title: 'Mencari...', didOpen: () => { Swal.showLoading(); loadFromCloud(true); setTimeout(() => { Swal.close(); const found = students.find(x => String(x.nis).trim() === nis); if(found) renderStudentDashboard(found); else Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); }, 2000); }}); 
-                } else Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); 
+                    Swal.fire({ title: 'Mencari...', didOpen: () => { Swal.showLoading(); loadFromCloud(true); setTimeout(() => { Swal.close(); const found = students.find(x => String(x.nis).trim() === String(nis).trim()); if(found) renderStudentDashboard(found); else { Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); } }, 2000); }}); 
+                } else {
+                    Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); 
+                    localStorage.removeItem('lockedStudentNis');
+                    renderSplash();
+                }
             } 
         }
 
@@ -810,6 +873,11 @@
             });
             salatHTML += `</div><p class="text-center text-[10px] text-gray-400 mt-4 italic">*Laporan yang keliru hanya bisa dibatalkan oleh guru.</p></div>`;
 
+            // Penentuan Tombol Keluar (Logout)
+            const isLocked = localStorage.getItem('lockedStudentNis') === String(s.nis);
+            const logoutBtnHTML = isLocked 
+                ? `<button onclick="logoutLocked()" class="w-full mt-6 py-3 text-gray-500 font-bold border border-gray-300 rounded-lg hover:bg-gray-100 transition"><i class="fas fa-sign-out-alt mr-1"></i> Hapus Akses Perangkat</button>`
+                : `<button onclick="renderStudentLogin()" class="w-full mt-6 py-3 text-red-400 font-bold border border-red-200 rounded-lg hover:bg-red-50 transition">Keluar Akun</button>`;
 
             const html = `
                 <div class="px-4 pb-20 fade-in">
@@ -860,9 +928,25 @@
                     <div id="tab-salat" class="${activeTab==='salat'?'block':'hidden'} min-h-[250px]">${salatHTML}</div>
                     <div id="tab-note" class="${activeTab==='note'?'block':'hidden'} min-h-[250px]">${noteList}</div>
                     
-                    <button onclick="renderStudentLogin()" class="w-full mt-6 py-3 text-red-400 font-bold border border-red-200 rounded-lg hover:bg-red-50">Keluar Akun</button>
+                    ${logoutBtnHTML}
                 </div>`;
             document.getElementById('appContent').innerHTML = html;
+        }
+
+        window.logoutLocked = function() {
+            Swal.fire({
+                title: 'Hapus Akses?',
+                text: 'Aplikasi akan mengunci dan melupakan profil anak Anda dari HP ini. Anda akan membutuhkan Link Akses Pribadi dari guru lagi untuk bisa masuk.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Ya, Hapus Akses'
+            }).then((r) => {
+                if(r.isConfirmed) {
+                    localStorage.removeItem('lockedStudentNis');
+                    window.location.href = window.location.pathname;
+                }
+            });
         }
 
         window.handleStudentTab = function(type, nis, latestDate) {
@@ -906,10 +990,11 @@
                 <div class="pt-10 px-6 fade-in pb-10">
                     <h2 class="text-2xl font-bold mb-4">Pengaturan</h2>
                     <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
-                        <h3 class="font-bold text-blue-800 mb-2">Sinkronisasi & Link Ajaib</h3>
+                        <h3 class="font-bold text-blue-800 mb-2">Sinkronisasi & Link Umum</h3>
                         <input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (/exec)" class="w-full p-3 rounded border mb-2 text-sm">
                         <button onclick="checkConnectionAndSave(document.querySelector('#apiUrlInput').value)" class="w-full btn-3d btn-blue py-3 rounded-lg font-bold mb-3">Simpan Link App Script</button>
-                        <button onclick="copyShareLink()" class="w-full btn-3d btn-orange py-3 rounded-lg font-bold"><i class="fas fa-share-alt mr-2"></i> Salin Link Murid</button>
+                        <button onclick="copyShareLink()" class="w-full btn-3d btn-orange py-3 rounded-lg font-bold text-sm"><i class="fas fa-share-alt mr-2"></i> Salin Link Murid (Umum)</button>
+                        <p class="text-[10px] text-gray-500 mt-2 italic">*Untuk keamanan, lebih disarankan membagikan "Link Akses Pribadi" melalui profil masing-masing anak.</p>
                     </div>
                     <div class="bg-gray-50 p-4 rounded-xl border mb-4">
                         <h3 class="font-bold mb-2">Backup JSON</h3>
@@ -942,7 +1027,7 @@
             const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&mode=student`; 
             const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); 
             el.select(); document.execCommand('copy'); document.body.removeChild(el); 
-            Swal.fire({ title: 'Link Tersalin!', html: 'Bagikan ke siswa, saat diklik akan otomatis masuk ke menu murid.', icon: 'success' }); 
+            Swal.fire({ title: 'Link Umum Tersalin!', html: 'Link ini akan meminta murid memasukkan NIS secara manual.', icon: 'success' }); 
         }
 
         function checkConnectionAndSave(url) { 
@@ -1128,7 +1213,6 @@
             
             Swal.fire({title: 'Menyiapkan Dokumen...', html: 'Mendesain warna dan tabel Excel', didOpen: () => Swal.showLoading()});
             
-            // Muat library pembuat Excel berwarna (ExcelJS) secara otomatis
             if (typeof ExcelJS === 'undefined') {
                 await new Promise((resolve) => {
                     const script = document.createElement('script');
@@ -1141,15 +1225,15 @@
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Rekap Poin');
 
-            // 1. KOP SURAT (Header)
+            // 1. KOP SURAT
             worksheet.mergeCells('A1:H1');
             worksheet.getCell('A1').value = `DAFTAR AKUMULASI POIN KELAS ${schoolData.name.toUpperCase()}`;
-            worksheet.getCell('A1').font = { size: 16, bold: true, color: { argb: 'FF1E3A8A' } }; // Biru Tua
+            worksheet.getCell('A1').font = { size: 16, bold: true, color: { argb: 'FF1E3A8A' } };
             worksheet.getCell('A1').alignment = { horizontal: 'center' };
 
             worksheet.mergeCells('A2:H2');
             worksheet.getCell('A2').value = `SDIT QURRATU A'YUN AL-ISLAMI`;
-            worksheet.getCell('A2').font = { size: 14, bold: true, color: { argb: 'FF15803D' } }; // Hijau Tua
+            worksheet.getCell('A2').font = { size: 14, bold: true, color: { argb: 'FF15803D' } }; 
             worksheet.getCell('A2').alignment = { horizontal: 'center' };
 
             worksheet.mergeCells('A3:H3');
@@ -1157,18 +1241,18 @@
             worksheet.getCell('A3').font = { size: 12, bold: true };
             worksheet.getCell('A3').alignment = { horizontal: 'center' };
 
-            worksheet.addRow([]); // Baris kosong sebagai pembatas
+            worksheet.addRow([]); 
 
-            // 2. HEADER TABEL DENGAN WARNA
+            // 2. HEADER
             const headerRow = worksheet.addRow(['No', 'NIS', 'Nama Lengkap Siswa', 'Kelas', 'Tanggal Lahir', 'Total Positif', 'Total Negatif', 'Poin Akhir']);
             headerRow.eachCell((cell) => {
-                cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; // Tulisan Putih
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } }; // Latar Biru
+                cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } }; 
                 cell.alignment = { horizontal: 'center', vertical: 'middle' };
                 cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
             });
 
-            // 3. ISI DATA SISWA & REKAP POIN
+            // 3. DATA
             students.forEach((s, idx) => {
                 const studentLogs = logs.filter(l => String(l.studentId) === String(s.nis));
                 const posPoints = studentLogs.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0);
@@ -1186,27 +1270,25 @@
                     totalPoints
                 ]);
 
-                // Atur bingkai, tata letak, dan warna baris poin
                 row.eachCell((cell, colNumber) => {
                     cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
                     cell.alignment = { vertical: 'middle' };
                     
-                    if ([1, 2, 4, 5].includes(colNumber)) { // Rata Tengah untuk No, NIS, Kelas, TTL
+                    if ([1, 2, 4, 5].includes(colNumber)) { 
                         cell.alignment = { horizontal: 'center', vertical: 'middle' };
                     }
                     
-                    // Warna Spesial untuk Poin
-                    if (colNumber === 6) { // Positif (Hijau)
+                    if (colNumber === 6) { 
                         cell.font = { color: { argb: 'FF166534' }, bold: true };
                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
                         cell.alignment = { horizontal: 'center', vertical: 'middle' };
                     }
-                    if (colNumber === 7) { // Negatif (Merah)
+                    if (colNumber === 7) { 
                         cell.font = { color: { argb: 'FF991B1B' }, bold: true };
                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
                         cell.alignment = { horizontal: 'center', vertical: 'middle' };
                     }
-                    if (colNumber === 8) { // Poin Akhir (Kuning Emas)
+                    if (colNumber === 8) { 
                         cell.font = { color: { argb: 'FF854D0E' }, bold: true, size: 12 };
                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF08A' } };
                         cell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1214,17 +1296,17 @@
                 });
             });
 
-            // 4. ATUR LEBAR KOLOM AGAR RAPI
-            worksheet.getColumn(1).width = 5;  // No
-            worksheet.getColumn(2).width = 15; // NIS
-            worksheet.getColumn(3).width = 30; // Nama
-            worksheet.getColumn(4).width = 10; // Kelas
-            worksheet.getColumn(5).width = 18; // Tanggal Lahir
-            worksheet.getColumn(6).width = 15; // Total Positif
-            worksheet.getColumn(7).width = 15; // Total Negatif
-            worksheet.getColumn(8).width = 15; // Poin Akhir
+            // 4. ATUR LEBAR KOLOM
+            worksheet.getColumn(1).width = 5;  
+            worksheet.getColumn(2).width = 15; 
+            worksheet.getColumn(3).width = 30; 
+            worksheet.getColumn(4).width = 10; 
+            worksheet.getColumn(5).width = 18; 
+            worksheet.getColumn(6).width = 15; 
+            worksheet.getColumn(7).width = 15; 
+            worksheet.getColumn(8).width = 15; 
 
-            // Hasilkan dan Unduh File
+            // UNDUH
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const url = window.URL.createObjectURL(blob);
@@ -1280,8 +1362,10 @@
         }
 
         window.onload = function() { 
-            if(!checkAutoConfig()) renderSplash(); 
+            checkAutoConfig(); 
+            if(!isStudentModeOnly && !localStorage.getItem('lockedStudentNis')) renderSplash(); 
             if(schoolData.apiUrl) setTimeout(() => loadFromCloud(false), 500); 
+            else if(isStudentModeOnly || localStorage.getItem('lockedStudentNis')) renderSplash(); // Pastikan splash termuat jika offline
         };
     </script>
 </body>
