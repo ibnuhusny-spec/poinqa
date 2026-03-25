@@ -187,6 +187,25 @@
         let schoolData, students, logs, behaviors;
         let currentScreen = 'splash';
         let tempAddPhoto = ""; 
+        let isStudentModeOnly = false;
+
+        // --- SISTEM KEAMANAN & ANTI-SPAM ---
+        let lastActionTime = 0;
+        let spamCounter = 0;
+        function isSpamDetected() {
+            const now = Date.now();
+            if (now - lastActionTime < 1500) { // Jika klik berjarak kurang dari 1.5 detik
+                spamCounter++;
+                if (spamCounter >= 3) {
+                    Swal.fire('Sistem Keamanan', 'Aktivitas tidak wajar terdeteksi. Harap pelan-pelan.', 'warning');
+                    return true;
+                }
+            } else {
+                spamCounter = 0;
+            }
+            lastActionTime = now;
+            return false;
+        }
 
         // --- INISIALISASI ---
         try {
@@ -202,11 +221,12 @@
                 if (b.id === 104) b.label = 'Salat Magrib';
             });
 
-            // Injeksi otomatis list salat (positif & negatif) jika guru memakai data lama
-            const salatIDs = [101, 102, 103, 104, 105, 106, 201, 202, 203, 204, 205, 206];
+            // PERBAIKAN: Memaksa inject sistem salat agar pasti muncul di "Atur Poin"
+            const systemIDs = [101, 102, 103, 104, 105, 106, 201, 202, 203, 204, 205, 206];
             let isChanged = false;
-            salatIDs.forEach(id => {
-                if(!behaviors.find(b => b.id === id)) {
+            systemIDs.forEach(id => {
+                const existingIdx = behaviors.findIndex(b => b.id === id);
+                if (existingIdx === -1) {
                     const newB = initialBehaviors.find(b => b.id === id);
                     if(newB) { behaviors.push({...newB}); isChanged = true; }
                 }
@@ -230,6 +250,8 @@
             const schoolName = params.get('school'); 
             const schoolLoc = params.get('loc'); 
             
+            if (params.get('mode') === 'student') isStudentModeOnly = true;
+
             let isUpdated = false;
 
             if (apiLink && apiLink !== schoolData.apiUrl) { schoolData.apiUrl = apiLink; isUpdated = true; }
@@ -244,10 +266,14 @@
         }
 
         // --- NAVIGATION ---
-        function goHome() { if(currentScreen !== 'splash') renderModeSelection(); }
+        function goHome() { if(currentScreen !== 'splash') { isStudentModeOnly ? renderStudentLogin() : renderModeSelection(); } }
         function goBack() {
             if (['teacher_detail', 'add_student', 'manage_behaviors', 'setup', 'edit_student'].includes(currentScreen)) renderTeacherDashboard(); 
-            else if (['teacher_dashboard', 'student_login'].includes(currentScreen)) renderModeSelection(); 
+            else if (['teacher_dashboard'].includes(currentScreen)) renderModeSelection(); 
+            else if (currentScreen === 'student_login') {
+                if (isStudentModeOnly) renderSplash();
+                else renderModeSelection();
+            }
             else if (currentScreen === 'student_dashboard') renderStudentLogin(); 
             else if (currentScreen === 'mode_selection') renderSplash(); 
         }
@@ -384,7 +410,7 @@
                     <h1 class="text-3xl font-black text-blue-600 mb-2">POINKU PRO</h1>
                     <h2 class="text-xl font-bold text-gray-700 mb-1 leading-tight">${schoolData.name}</h2>
                     <p class="text-md text-gray-500 mb-8">${schoolData.location}</p>
-                    <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs py-4 rounded-xl text-xl font-bold">MULAI APLIKASI</button>
+                    <button onclick="${isStudentModeOnly ? 'renderStudentLogin()' : 'renderModeSelection()'}" class="btn-3d btn-blue w-full max-w-xs py-4 rounded-xl text-xl font-bold">MULAI APLIKASI</button>
                 </div>`;
             document.getElementById('appContent').innerHTML = html;
         }
@@ -577,6 +603,8 @@
         }
 
         function addPoint(nis, bid, currentTab) { 
+            if (isSpamDetected()) return; // Proteksi Spam
+
             const b = behaviors.find(x => String(x.id) === String(bid)); 
             if(b) { 
                 const sName = students.find(s=>String(s.nis)===String(nis)).name;
@@ -586,7 +614,19 @@
         }
 
         function addNoteOnly(nis) { 
+            if (isSpamDetected()) return; // Proteksi Spam
+            
+            // Proteksi Spam Catatan: Batasi 10 Detik antar pesan
+            const recentNotes = logs.filter(l => String(l.studentId) === String(nis) && l.note);
+            if (recentNotes.length > 0) {
+                recentNotes.sort((a,b) => b.id - a.id);
+                const timeDiff = Date.now() - new Date(recentNotes[0].date).getTime();
+                if (timeDiff < 10000) return Swal.fire('Tunggu!', 'Harap tunggu 10 detik sebelum mengirim pesan lagi.', 'warning');
+            }
+
             const txt = document.getElementById('noteInput').value; if(!txt) return; 
+            if(txt.length > 500) return Swal.fire('Error', 'Pesan maksimal 500 karakter.', 'error');
+
             const sName = students.find(s=>String(s.nis)===String(nis)).name;
             logs.push({ id: Date.now(), studentId: nis, studentName: sName, behaviorLabel: "Catatan Guru", points: 0, type: 'neutral', note: txt, date: new Date().toISOString() }); 
             saveData(); Swal.fire('Terkirim', '', 'success').then(()=> renderStudentDetail(nis, 'note')); 
@@ -603,6 +643,8 @@
         }
 
         window.reportSalat = function(nis, bid) {
+            if (isSpamDetected()) return; // Proteksi Spam
+
             const b = behaviors.find(x => String(x.id) === String(bid)) || initialBehaviors.find(x => String(x.id) === String(bid));
             if(!b) return;
             
@@ -1026,6 +1068,10 @@
                         Swal.showValidationMessage('Nama dan Poin (minimal 1) harus diisi!');
                         return false;
                     }
+                    if(p > 100) {
+                        Swal.showValidationMessage('Keamanan: Poin maksimal dibatasi 100!');
+                        return false;
+                    }
                     return { label: l, points: p };
                 } 
             }).then((result) => {
@@ -1040,10 +1086,12 @@
         }
 
         function addNewBehaviorPrompt() { 
-            Swal.fire({ html: `<input id="l" class="swal2-input" placeholder="Nama Perilaku"><input id="p" type="number" class="swal2-input" placeholder="Poin (Angka)"><select id="t" class="swal2-input"><option value="plus">Positif (+)</option><option value="minus">Negatif (-)</option></select>`, 
+            Swal.fire({ html: `<input id="l" class="swal2-input" placeholder="Nama Perilaku"><input id="p" type="number" class="swal2-input" placeholder="Poin (Angka Maks 100)"><select id="t" class="swal2-input"><option value="plus">Positif (+)</option><option value="minus">Negatif (-)</option></select>`, 
                 preConfirm: () => { 
                     const l = document.getElementById('l').value; let p = parseInt(document.getElementById('p').value); const t = document.getElementById('t').value; 
-                    if(!l || !p) return; p = t === 'minus' ? -Math.abs(p) : Math.abs(p); 
+                    if(!l || !p) return; 
+                    if(p > 100) return Swal.showValidationMessage('Keamanan: Poin maksimal dibatasi 100!');
+                    p = t === 'minus' ? -Math.abs(p) : Math.abs(p); 
                     behaviors.push({id: Date.now(), label: l, points: p, type: t, icon: 'fa-star'}); saveData(); renderManageBehaviors(); 
                 } 
             }); 
