@@ -58,7 +58,6 @@
         .btn-gray { background-color: #6b7280 !important; border-color: #374151 !important; } 
         .btn-purple { background-color: #8b5cf6 !important; border-color: #6d28d9 !important; } 
         .btn-yellow { background-color: #eab308 !important; border-color: #a16207 !important; }
-        .btn-teal { background-color: #14b8a6 !important; border-color: #0f766e !important; }
 
         /* LIST ITEM STYLES (LONG LIST FORMAT) */
         .list-item-card {
@@ -70,9 +69,6 @@
         .list-item-card:active { 
             transform: translateY(3px); border-bottom-width: 1px; margin-bottom: 13px; 
         }
-        .list-item-card.disabled {
-            opacity: 0.6; cursor: not-allowed; border-bottom-width: 1px; transform: translateY(3px); margin-bottom: 13px;
-        }
 
         .item-good { border-color: #22c55e; color: #14532d; }
         .item-good .icon-box { background-color: #dcfce7; color: #166534; }
@@ -81,10 +77,6 @@
         .item-bad { border-color: #ef4444; color: #7f1d1d; }
         .item-bad .icon-box { background-color: #fee2e2; color: #991b1b; }
         .item-bad .point-badge { background-color: #ef4444; color: white; }
-        
-        .item-salat { border-color: #14b8a6; color: #134e4a; }
-        .item-salat .icon-box { background-color: #ccfbf1; color: #0f766e; }
-        .item-salat .point-badge { background-color: #14b8a6; color: white; }
 
         .icon-box { 
             width: 40px; height: 40px; border-radius: 50%; display: flex; 
@@ -101,14 +93,14 @@
 
         /* Tab Buttons */
         .tab-btn { 
-            flex: 1; padding: 10px 2px; font-weight: bold; font-size: 0.75rem; 
+            flex: 1; padding: 12px 0; font-weight: bold; font-size: 0.75rem; 
             border-radius: 8px; transition: all 0.2s; border: 1px solid transparent; 
-            position: relative; text-align: center;
+            position: relative;
         }
         .tab-active-good { background: #dcfce7; color: #166534; border-color: #22c55e; }
         .tab-active-bad { background: #fee2e2; color: #991b1b; border-color: #ef4444; }
+        .tab-active-salat { background: #ccfbf1; color: #115e59; border-color: #14b8a6; } /* New Tab Color */
         .tab-active-note { background: #dbeafe; color: #1e40af; border-color: #3b82f6; }
-        .tab-active-salat { background: #ccfbf1; color: #0f766e; border-color: #14b8a6; }
         .tab-inactive { background: white; color: #9ca3af; border-color: #e5e7eb; }
 
         .bg-pattern { 
@@ -147,6 +139,7 @@
                 <button onclick="goHome()" class="text-green-500 hover:bg-green-50 p-2 rounded-full w-10 h-10 flex items-center justify-center">
                     <i class="fas fa-home"></i>
                 </button>
+                <!-- Tombol Shutdown -->
                 <button onclick="shutdownApp()" class="text-red-500 hover:bg-red-50 p-2 rounded-full w-10 h-10 flex items-center justify-center">
                     <i class="fas fa-power-off"></i>
                 </button>
@@ -167,21 +160,28 @@
         // --- DATA DEFAULT ---
         const defaultSchoolData = { name: "Kelas 1A", location: "SDIT Qurratu A'yun Al-Islami", logo: "logo.png", apiUrl: "" };
         const initialBehaviors = [
+            // Perilaku Baik
             { id: 1, type: 'plus', label: 'Sholat Dhuha', points: 5, icon: 'fa-person-praying' }, 
             { id: 2, type: 'plus', label: 'Membantu Teman', points: 3, icon: 'fa-hand-holding-heart' },
             { id: 3, type: 'plus', label: 'Hafalan Qur\'an', points: 10, icon: 'fa-book-quran' }, 
+            // Kontrol Salat 5 Waktu di rumah (Positif)
+            { id: 101, type: 'plus', label: 'Salat Subuh', points: 2, icon: 'fa-cloud-moon' },
+            { id: 102, type: 'plus', label: 'Salat Zuhur', points: 2, icon: 'fa-sun' },
+            { id: 103, type: 'plus', label: 'Salat Asar', points: 2, icon: 'fa-cloud-sun' },
+            { id: 104, type: 'plus', label: 'Salat Magrib', points: 2, icon: 'fa-moon' },
+            { id: 105, type: 'plus', label: 'Salat Isya', points: 2, icon: 'fa-star-and-crescent' },
+            { id: 106, type: 'plus', label: 'Salat Jumat', points: 5, icon: 'fa-users' },
+            // Kontrol Salat 5 Waktu di rumah (Negatif)
+            { id: 201, type: 'minus', label: 'Tidak Salat Subuh', points: -2, icon: 'fa-cloud-moon' },
+            { id: 202, type: 'minus', label: 'Tidak Salat Zuhur', points: -2, icon: 'fa-sun' },
+            { id: 203, type: 'minus', label: 'Tidak Salat Asar', points: -2, icon: 'fa-cloud-sun' },
+            { id: 204, type: 'minus', label: 'Tidak Salat Magrib', points: -2, icon: 'fa-moon' },
+            { id: 205, type: 'minus', label: 'Tidak Salat Isya', points: -2, icon: 'fa-star-and-crescent' },
+            { id: 206, type: 'minus', label: 'Tidak Salat Jumat', points: -5, icon: 'fa-users' },
+            // Perilaku Buruk
             { id: 4, type: 'minus', label: 'Terlambat', points: -5, icon: 'fa-person-running' }, 
             { id: 5, type: 'minus', label: 'Tidak Mengerjakan PR', points: -10, icon: 'fa-book-open' },
             { id: 6, type: 'minus', label: 'Berkelahi / Gaduh', points: -15, icon: 'fa-user-injured' }
-        ];
-        
-        // Data Salat 5 Waktu Harian
-        const salatList = [
-            { id: 'subuh', label: 'Salat Subuh', points: 5, icon: 'fa-moon' },
-            { id: 'dzuhur', label: 'Salat Dzuhur', points: 5, icon: 'fa-sun' },
-            { id: 'ashar', label: 'Salat Ashar', points: 5, icon: 'fa-cloud-sun' },
-            { id: 'maghrib', label: 'Salat Maghrib', points: 5, icon: 'fa-cloud-moon' },
-            { id: 'isya', label: 'Salat Isya', points: 5, icon: 'fa-star' }
         ];
 
         let schoolData, students, logs, behaviors;
@@ -194,6 +194,25 @@
             students = JSON.parse(localStorage.getItem('students')) || [];
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
+            
+            // Perbaiki ejaan lama jika sudah terlanjur tersimpan di HP guru
+            behaviors.forEach(b => {
+                if (b.id === 102) b.label = 'Salat Zuhur';
+                if (b.id === 103) b.label = 'Salat Asar';
+                if (b.id === 104) b.label = 'Salat Magrib';
+            });
+
+            // Injeksi otomatis list salat (positif & negatif) jika guru memakai data lama
+            const salatIDs = [101, 102, 103, 104, 105, 106, 201, 202, 203, 204, 205, 206];
+            let isChanged = false;
+            salatIDs.forEach(id => {
+                if(!behaviors.find(b => b.id === id)) {
+                    const newB = initialBehaviors.find(b => b.id === id);
+                    if(newB) { behaviors.push(newB); isChanged = true; }
+                }
+            });
+            if(isChanged) localStorage.setItem('behaviors', JSON.stringify(behaviors));
+            
         } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; }
 
         function saveData(skipCloud = false) {
@@ -348,14 +367,6 @@
             } catch(e) { return d; }
         }
 
-        function isToday(dateString) {
-            const date = new Date(dateString);
-            const today = new Date();
-            return date.getDate() === today.getDate() &&
-                date.getMonth() === today.getMonth() &&
-                date.getFullYear() === today.getFullYear();
-        }
-
         // --- VIEWS ---
 
         // 1. Splash
@@ -370,7 +381,7 @@
                     <div class="w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-blue-200 overflow-hidden mb-6 animate-bounce">
                         <img src="${schoolData.logo}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2">
                     </div>
-                    <h1 class="text-4xl font-black text-blue-600 mb-2">POINKU PRO</h1>
+                    <h1 class="text-3xl font-black text-blue-600 mb-2">POINKU PRO</h1>
                     <h2 class="text-xl font-bold text-gray-700 mb-1 leading-tight">${schoolData.name}</h2>
                     <p class="text-md text-gray-500 mb-8">${schoolData.location}</p>
                     <button onclick="renderModeSelection()" class="btn-3d btn-blue w-full max-w-xs py-4 rounded-xl text-xl font-bold">MULAI APLIKASI</button>
@@ -415,7 +426,7 @@
                 const displayPhoto = s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png';
                 
                 listHTML += `
-                    <div onclick="renderStudentDetail('${s.nis}')" class="bg-white p-4 rounded-xl shadow border-l-4 ${totalPoints>=0?'border-green-400':'border-red-400'} mb-3 flex justify-between cursor-pointer hover:bg-gray-50">
+                    <div onclick="renderStudentDetail('${s.nis}')" class="bg-white p-4 rounded-xl shadow border-l-4 ${totalPoints>=0?'border-green-400':'border-red-400'} mb-3 flex justify-between cursor-pointer">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 rounded-full bg-gray-200 overflow-hidden"><img src="${displayPhoto}" class="w-full h-full object-cover"></div>
                             <div><h3 class="font-bold text-gray-800">${s.name}</h3><p class="text-xs text-gray-500">${s.kelas} | ${s.nis}</p></div>
@@ -479,24 +490,17 @@
                 </button>`
             ).join('');
             
-            // Filter berdasarkan tab aktif (good, bad, note, salat)
-            let filteredHistory = [];
-            if (activeTab === 'good') filteredHistory = studentLogs.filter(l => l.points > 0 && !l.isSalat);
-            else if (activeTab === 'bad') filteredHistory = studentLogs.filter(l => l.points < 0);
-            else if (activeTab === 'salat') filteredHistory = studentLogs.filter(l => l.isSalat);
-            else filteredHistory = studentLogs.filter(l => l.note);
-            
+            let filteredHistory = activeTab === 'good' ? studentLogs.filter(l => l.points > 0) : (activeTab === 'bad' ? studentLogs.filter(l => l.points < 0) : studentLogs.filter(l => l.note));
             filteredHistory.sort((a,b)=>b.id-a.id);
             
             const historyList = filteredHistory.map(l => `
                 <div class="flex justify-between items-center bg-white border rounded-lg p-2 mb-2 shadow-sm">
-                    <div class="w-3/4">
-                        <div class="font-bold text-xs ${l.isSalat ? 'text-teal-700' : ''}">${l.behaviorLabel} ${l.isSalat ? '<i class="fas fa-check-circle text-teal-500 ml-1"></i>' : ''}</div>
+                    <div class="w-3/4"><div class="font-bold text-xs">${l.behaviorLabel}</div>
                     ${l.note ? `<div class="text-[10px] text-blue-500 italic mt-0.5">"${l.note}"</div>` : ''}
                     <div class="text-[9px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div>
                     <div class="flex items-center gap-2"><span class="font-bold text-sm ${l.points>=0?'text-green-600':'text-red-500'}">${l.points>0?'+':''}${l.points}</span>
                     <button onclick="deleteLog(${l.id}, '${nis}', '${activeTab}')" class="text-gray-400 hover:text-red-500 px-2"><i class="fas fa-trash"></i></button></div>
-                </div>`).join('') || '<div class="text-center text-xs text-gray-400 py-4">Belum ada riwayat di kategori ini.</div>';
+                </div>`).join('') || '<div class="text-center text-xs text-gray-400 py-2">Belum ada riwayat.</div>';
             
             const displayPhoto = student.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png';
             const displayCover = student.teacherCoverPhoto || 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=600&q=80';
@@ -537,25 +541,17 @@
                     <div class="flex mb-4 bg-gray-100 p-1 rounded-xl shadow-inner">
                         <button onclick="setTab('good', '${nis}')" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button>
                         <button onclick="setTab('bad', '${nis}')" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button>
-                        <button onclick="setTab('salat', '${nis}')" class="tab-btn ${activeTab==='salat'?'tab-active-salat':'tab-inactive'}">Salat</button>
                         <button onclick="setTab('note', '${nis}')" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'}">Catatan</button>
                     </div>
                     
                     <div class="mb-4">
-                        <h3 class="font-bold text-gray-700 text-sm mb-2 border-b pb-1">
-                            ${activeTab === 'salat' ? 'Riwayat Salat' : 'Riwayat Terbaru'}
-                        </h3>
+                        <h3 class="font-bold text-gray-700 text-sm mb-2 border-b pb-1">Riwayat Terbaru</h3>
                         <div class="bg-gray-50 rounded p-2 max-h-40 overflow-y-auto shadow-inner">${historyList}</div>
                     </div>
                     
                     <!-- Area Tombol Aksi -->
                     <div class="${activeTab==='good'?'block':'hidden'}"><div class="flex flex-col">${goodButtons}</div></div>
                     <div class="${activeTab==='bad'?'block':'hidden'}"><div class="flex flex-col">${badButtons}</div></div>
-                    <div class="${activeTab==='salat'?'block':'hidden'}">
-                        <div class="bg-teal-50 text-teal-800 p-3 rounded-lg text-xs mb-3 border border-teal-200">
-                            <i class="fas fa-info-circle mr-1"></i> Data salat ini dilaporkan langsung oleh murid/wali murid melalui dasbor murid.
-                        </div>
-                    </div>
                     <div class="${activeTab==='note'?'block':'hidden'}">
                         <textarea id="noteInput" rows="3" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400" placeholder="Ketik pesan untuk wali murid..."></textarea>
                         <button onclick="addNoteOnly('${nis}')" class="btn-3d btn-blue w-full mt-3 py-3 rounded-lg font-bold">Kirim Pesan</button>
@@ -596,6 +592,47 @@
             saveData(); Swal.fire('Terkirim', '', 'success').then(()=> renderStudentDetail(nis, 'note')); 
         }
 
+        // --- SISTEM LAPOR SALAT (MODE MURID) ---
+        window.isLoggedToday = function(nis, label) {
+            const today = new Date().toLocaleDateString('id-ID');
+            return logs.some(l =>
+                String(l.studentId) === String(nis) &&
+                l.behaviorLabel === label &&
+                new Date(l.date).toLocaleDateString('id-ID') === today
+            );
+        }
+
+        window.reportSalat = function(nis, bid) {
+            const b = behaviors.find(x => String(x.id) === String(bid));
+            if(!b) return;
+            
+            const isPos = b.type === 'plus';
+            
+            Swal.fire({
+                title: isPos ? 'Lapor Salat?' : 'Lapor Tidak Salat?',
+                text: isPos ? `Apakah kamu sudah melaksanakan ${b.label}?` : `Astagfirullah, benar kamu meninggalkan ${b.label.replace('Tidak ', '')}?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: isPos ? '#14b8a6' : '#ef4444',
+                confirmButtonText: isPos ? 'Ya, Sudah' : 'Ya, Tidak',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if(result.isConfirmed) {
+                    const sName = students.find(s=>String(s.nis)===String(nis)).name;
+                    logs.push({ id: Date.now(), studentId: nis, studentName: sName, behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() });
+                    saveData();
+                    Swal.fire({ 
+                        title: isPos ? 'Masyaallah!' : 'Peringatan', 
+                        text: `Poin ${b.points > 0 ? '+'+b.points : b.points} ditambahkan.`, 
+                        icon: isPos ? 'success' : 'warning', 
+                        timer: 1500, 
+                        showConfirmButton: false 
+                    }).then(() => renderStudentDashboard(students.find(s=>String(s.nis)===String(nis)), 'salat'));
+                }
+            });
+        }
+
+
         // 5. Student Login & Dashboard
         function renderStudentLogin() { 
             currentScreen = 'student_login'; 
@@ -604,7 +641,7 @@
                     <div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 text-3xl shadow-inner"><i class="fas fa-lock"></i></div>
                     <h2 class="text-2xl font-bold text-gray-800 mb-2">Login Murid</h2>
                     <input id="loginNis" placeholder="Masukkan NIS" class="w-full p-4 border rounded text-center text-xl mb-4 shadow">
-                    <button onclick="handleLogin()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white shadow-lg">MASUK & CEK POIN</button>
+                    <button onclick="handleLogin()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white shadow-lg">MASUK & LAPOR SALAT</button>
                 </div>`; 
             document.getElementById('appContent').innerHTML = html; 
         }
@@ -620,49 +657,7 @@
             } 
         }
 
-        // FUNGSI LAPOR SALAT OLEH MURID/ORTU
-        window.submitSalat = function(nis, salatId) {
-            const salatData = salatList.find(s => s.id === salatId);
-            if(!salatData) return;
-
-            Swal.fire({
-                title: `Lapor ${salatData.label}?`,
-                text: "Pastikan ananda benar-benar sudah melaksanakan salat ini hari ini.",
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#14b8a6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Ya, Sudah Salat'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    const student = students.find(s => String(s.nis) === String(nis));
-                    logs.push({
-                        id: Date.now(),
-                        studentId: nis,
-                        studentName: student.name,
-                        behaviorLabel: salatData.label,
-                        points: salatData.points,
-                        type: 'plus',
-                        isSalat: true,
-                        date: new Date().toISOString()
-                    });
-                    saveData();
-                    Swal.fire({
-                        title: 'Alhamdulillah',
-                        text: `Barakallah, poin +${salatData.points} berhasil ditambahkan!`,
-                        icon: 'success',
-                        timer: 1500,
-                        showConfirmButton: false
-                    }).then(() => {
-                        // Kembali render tab salat
-                        const activeTab = 'salat';
-                        renderStudentDashboard(student, activeTab);
-                    });
-                }
-            });
-        }
-
-        function renderStudentDashboard(s, initialTab = 'good') {
+        function renderStudentDashboard(s, activeTab = 'good') {
             currentScreen = 'student_dashboard';
             const myLogs = logs.filter(l => String(l.studentId) === String(s.nis)).sort((a,b) => b.id - a.id);
             const posPoints = myLogs.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0);
@@ -680,41 +675,59 @@
             const displayPhoto = s.studentPhoto || 'https://cdn-icons-png.flaticon.com/512/194/194938.png';
             const displayCover = s.studentCoverPhoto || 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=600&q=80';
 
-            const posList = myLogs.filter(l => l.points > 0 && !l.isSalat).map(l => `<div class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-check-circle"></i></div><span class="behavior-text">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge">+${l.points}</span><div class="text-[9px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-6">Belum ada data positif</div>';
+            const posList = myLogs.filter(l => l.points > 0).map(l => `<div class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-check-circle"></i></div><span class="behavior-text">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge">+${l.points}</span><div class="text-[9px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-6">Belum ada data positif</div>';
             const negList = myLogs.filter(l => l.points < 0).map(l => `<div class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-exclamation-triangle"></i></div><span class="behavior-text">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge">${l.points}</span><div class="text-[9px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-6">Aman, tidak ada data negatif</div>';
             const noteList = notes.map(l => `<div class="bg-blue-50 p-3 mb-3 rounded-lg border border-blue-200 shadow-sm"><i class="fas fa-comment-dots text-blue-400 mr-2"></i><span class="text-sm font-semibold">"${l.note}"</span><br><small class="text-gray-400 text-[10px] ml-6">${formatLogDate(l.date)}</small></div>`).join('') || '<div class="text-center text-gray-400 mt-6">Belum ada pesan dari guru</div>';
 
-            // Generate UI Salat
-            const salatUI = salatList.map(salat => {
-                // Cek apakah hari ini salat tersebut sudah diinput
-                const isDoneToday = myLogs.some(l => l.isSalat && l.behaviorLabel === salat.label && isToday(l.date));
+            // --- TAB SALAT GENERATOR ---
+            const salatPairs = [
+                { posId: 101, negId: 201, icon: 'fa-cloud-moon', name: 'Subuh' },
+                { posId: 102, negId: 202, icon: 'fa-sun', name: 'Zuhur' },
+                { posId: 103, negId: 203, icon: 'fa-cloud-sun', name: 'Asar' },
+                { posId: 104, negId: 204, icon: 'fa-moon', name: 'Magrib' },
+                { posId: 105, negId: 205, icon: 'fa-star-and-crescent', name: 'Isya' },
+                { posId: 106, negId: 206, icon: 'fa-users', name: 'Jumat' }
+            ];
+
+            let salatHTML = `<div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-4">
+                <h3 class="font-bold text-center mb-1 text-gray-700">Laporan Salat Hari Ini</h3>
+                <p class="text-center text-xs text-gray-400 mb-4">${new Date().toLocaleDateString('id-ID', {weekday:'long', day:'numeric', month:'long'})}</p>
+                <div class="space-y-3">`;
+            
+            salatPairs.forEach(pair => {
+                const posB = behaviors.find(x => x.id === pair.posId);
+                const negB = behaviors.find(x => x.id === pair.negId);
                 
-                if (isDoneToday) {
-                    return `
-                        <div class="list-item-card disabled bg-gray-50 border-gray-300 mb-3">
-                            <div class="flex items-center gap-3">
-                                <div class="icon-box bg-gray-200 text-gray-400"><i class="fas ${salat.icon}"></i></div>
-                                <span class="behavior-text text-gray-500 line-through">${salat.label}</span>
-                            </div>
-                            <div class="text-right flex flex-col items-end">
-                                <span class="text-xs font-bold text-teal-600"><i class="fas fa-check-circle mr-1"></i>Selesai</span>
-                            </div>
-                        </div>
-                    `;
+                if(!posB || !negB) return;
+
+                const isDonePos = isLoggedToday(s.nis, posB.label);
+                const isDoneNeg = isLoggedToday(s.nis, negB.label);
+                
+                if(isDonePos) {
+                    salatHTML += `<div class="flex justify-between items-center p-3 bg-teal-50 border border-teal-200 rounded-lg text-teal-700 shadow-sm">
+                        <div class="flex items-center gap-3"><i class="fas ${pair.icon} w-5 text-center text-teal-500"></i><span class="font-bold">Salat ${pair.name}</span></div>
+                        <div class="flex items-center gap-2 text-xs font-bold"><i class="fas fa-check-circle text-lg"></i> Selesai</div>
+                    </div>`;
+                } else if (isDoneNeg) {
+                    salatHTML += `<div class="flex justify-between items-center p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 shadow-sm">
+                        <div class="flex items-center gap-3"><i class="fas ${pair.icon} w-5 text-center text-red-500"></i><span class="font-bold line-through">Salat ${pair.name}</span></div>
+                        <div class="flex items-center gap-2 text-xs font-bold"><i class="fas fa-times-circle text-lg"></i> Tidak</div>
+                    </div>`;
                 } else {
-                    return `
-                        <button onclick="submitSalat('${s.nis}', '${salat.id}')" class="list-item-card item-salat mb-3">
-                            <div class="flex items-center gap-3">
-                                <div class="icon-box"><i class="fas ${salat.icon}"></i></div>
-                                <span class="behavior-text">${salat.label}</span>
-                            </div>
-                            <div class="text-right">
-                                <span class="point-badge">+${salat.points}</span>
-                            </div>
-                        </button>
-                    `;
+                    salatHTML += `<div class="flex flex-col bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                        <div class="flex items-center gap-3 mb-2">
+                            <i class="fas ${pair.icon} w-5 text-center text-gray-400"></i>
+                            <span class="font-bold text-gray-600">Salat ${pair.name}</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="reportSalat('${s.nis}', ${posB.id})" class="flex-1 bg-teal-50 text-teal-700 border border-teal-200 py-2 rounded-lg text-xs font-bold hover:bg-teal-100 active:bg-teal-200 transition"><i class="fas fa-check mr-1"></i> Salat (+${posB.points})</button>
+                            <button onclick="reportSalat('${s.nis}', ${negB.id})" class="flex-1 bg-red-50 text-red-700 border border-red-200 py-2 rounded-lg text-xs font-bold hover:bg-red-100 active:bg-red-200 transition"><i class="fas fa-times mr-1"></i> Tidak (${negB.points})</button>
+                        </div>
+                    </div>`;
                 }
-            }).join('');
+            });
+            salatHTML += `</div><p class="text-center text-[10px] text-gray-400 mt-4 italic">*Laporan yang keliru hanya bisa dibatalkan oleh guru.</p></div>`;
+
 
             const html = `
                 <div class="px-4 pb-20 fade-in">
@@ -745,11 +758,11 @@
                     </div>
                     
                     <!-- Tab Menu -->
-                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl shadow-inner relative">
-                        <button onclick="setTab('good')" id="btn-good" class="tab-btn ${initialTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button>
-                        <button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${initialTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button>
-                        <button onclick="setTab('salat')" id="btn-salat" class="tab-btn ${initialTab==='salat'?'tab-active-salat':'tab-inactive'}"><i class="fas fa-mosque mr-1"></i> Salat</button>
-                        <button onclick="handleStudentTab('note', '${s.nis}', '${latestNote ? latestNote.date : ''}')" id="btn-note" class="tab-btn ${initialTab==='note'?'tab-active-note':'tab-inactive'} relative">
+                    <div class="flex mb-4 bg-gray-100 p-1 rounded-xl shadow-inner relative gap-1">
+                        <button onclick="setTab('good')" id="btn-good" class="tab-btn ${activeTab==='good'?'tab-active-good':'tab-inactive'}">Positif</button>
+                        <button onclick="setTab('bad')" id="btn-bad" class="tab-btn ${activeTab==='bad'?'tab-active-bad':'tab-inactive'}">Negatif</button>
+                        <button onclick="setTab('salat')" id="btn-salat" class="tab-btn ${activeTab==='salat'?'tab-active-salat':'tab-inactive'}"><i class="fas fa-pray mr-1"></i> Salat</button>
+                        <button onclick="handleStudentTab('note', '${s.nis}', '${latestNote ? latestNote.date : ''}')" id="btn-note" class="tab-btn ${activeTab==='note'?'tab-active-note':'tab-inactive'} relative">
                             Pesan
                             ${hasNewNote ? `
                             <span id="noteBadge" class="absolute top-1 right-2 flex h-3 w-3">
@@ -759,17 +772,12 @@
                         </button>
                     </div>
                     
-                    <div id="tab-good" class="${initialTab==='good'?'':'hidden'} min-h-[250px]">${posList}</div>
-                    <div id="tab-bad" class="${initialTab==='bad'?'':'hidden'} min-h-[250px]">${negList}</div>
-                    <div id="tab-note" class="${initialTab==='note'?'':'hidden'} min-h-[250px]">${noteList}</div>
-                    <div id="tab-salat" class="${initialTab==='salat'?'':'hidden'} min-h-[250px]">
-                        <div class="bg-teal-50 text-teal-800 p-3 rounded-lg text-xs mb-4 border border-teal-200 text-center font-semibold">
-                            Ceklis salat hari ini bersama orang tua. <br/>Masing-masing salat mendapat poin tambahan!
-                        </div>
-                        <div class="flex flex-col">${salatUI}</div>
-                    </div>
+                    <div id="tab-good" class="${activeTab==='good'?'block':'hidden'} min-h-[250px]">${posList}</div>
+                    <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'} min-h-[250px]">${negList}</div>
+                    <div id="tab-salat" class="${activeTab==='salat'?'block':'hidden'} min-h-[250px]">${salatHTML}</div>
+                    <div id="tab-note" class="${activeTab==='note'?'block':'hidden'} min-h-[250px]">${noteList}</div>
                     
-                    <button onclick="renderStudentLogin()" class="w-full mt-6 py-3 text-red-400 font-bold border border-red-200 rounded-lg hover:bg-red-50">Keluar</button>
+                    <button onclick="renderStudentLogin()" class="w-full mt-6 py-3 text-red-400 font-bold border border-red-200 rounded-lg hover:bg-red-50">Keluar Akun</button>
                 </div>`;
             document.getElementById('appContent').innerHTML = html;
         }
@@ -818,7 +826,7 @@
                         <h3 class="font-bold text-blue-800 mb-2">Sinkronisasi & Link Ajaib</h3>
                         <input type="text" id="apiUrlInput" value="${schoolData.apiUrl}" placeholder="Link Script (/exec)" class="w-full p-3 rounded border mb-2 text-sm">
                         <button onclick="checkConnectionAndSave(document.querySelector('#apiUrlInput').value)" class="w-full btn-3d btn-blue py-3 rounded-lg font-bold mb-3">Simpan Link App Script</button>
-                        <button onclick="copyShareLink()" class="w-full btn-3d btn-orange py-3 rounded-lg font-bold"><i class="fas fa-share-alt mr-2"></i> Salin Link Ajaib Murid</button>
+                        <button onclick="copyShareLink()" class="w-full btn-3d btn-orange py-3 rounded-lg font-bold"><i class="fas fa-share-alt mr-2"></i> Salin Link Murid</button>
                     </div>
                     <div class="bg-gray-50 p-4 rounded-xl border mb-4">
                         <h3 class="font-bold mb-2">Backup JSON</h3>
@@ -845,11 +853,10 @@
         function copyShareLink() { 
             if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting', 'error'); 
             const baseUrl = window.location.href.split('?')[0]; 
-            // PARAMETER LOKASI (loc) DITAMBAHKAN DI SINI
             const finalLink = `${baseUrl}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&mode=student`; 
             const el = document.createElement('textarea'); el.value = finalLink; document.body.appendChild(el); 
             el.select(); document.execCommand('copy'); document.body.removeChild(el); 
-            Swal.fire({ title: 'Link Tersalin!', html: 'Bagikan ke siswa, saat diklik akan otomatis masuk ke menu murid dan mensinkronkan Nama Kelas dan Nama Sekolah.', icon: 'success' }); 
+            Swal.fire({ title: 'Link Tersalin!', html: 'Bagikan ke siswa, saat diklik akan otomatis masuk ke menu murid.', icon: 'success' }); 
         }
 
         function checkConnectionAndSave(url) { 
@@ -967,7 +974,7 @@
             
             const html = `
                 <div class="pt-6 px-6 pb-10 fade-in">
-                    <h2 class="text-xl font-bold mb-4">Daftar Item Poin</h2>
+                    <h2 class="text-xl font-bold mb-4">Daftar Item Poin & Salat</h2>
                     <div class="space-y-1 mb-4">${list}</div>
                     <button onclick="addNewBehaviorPrompt()" class="btn-3d btn-blue w-full py-3 rounded-lg mb-4">Tambah Item Baru</button>
                 </div>`; 
