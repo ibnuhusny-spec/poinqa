@@ -158,7 +158,7 @@
 
     <script>
         // --- DATA DEFAULT ---
-        const defaultSchoolData = { name: "Kelas 1A", location: "SDIT Qurratu A'yun Al-Islami", logo: "logo.png", apiUrl: "" };
+        const defaultSchoolData = { name: "Kelas 1A", location: "SDIT Qurratu A'yun Al-Islami", logo: "logo.png", apiUrl: "", teacherPassword: "QA-Poin77" };
         const initialBehaviors = [
             // Perilaku Baik
             { id: 1, type: 'plus', label: 'Sholat Dhuha', points: 5, icon: 'fa-person-praying' }, 
@@ -447,8 +447,9 @@
         }
 
         function checkTeacherPassword() { 
+            const currentPass = schoolData.teacherPassword || 'QA-Poin77';
             Swal.fire({ title: 'Password Guru', input: 'password', showCancelButton: true, confirmButtonText: 'Masuk', 
-                preConfirm: (p) => { if (p === 'QA-Poin77') return true; else Swal.showValidationMessage('Password Salah!'); } 
+                preConfirm: (p) => { if (p === currentPass) return true; else Swal.showValidationMessage('Password Salah!'); } 
             }).then((r) => { if (r.isConfirmed) renderTeacherDashboard(); }); 
         }
 
@@ -510,7 +511,9 @@
             const totalPoints = posPoints + negPoints;
 
             const sortedBehaviors = [...behaviors].sort((a, b) => (a.type === 'plus' ? -1 : 1));
-            const goodButtons = sortedBehaviors.filter(b => b.type === 'plus').map(b => 
+            
+            // Sembunyikan tombol salat (ID 101-106 dan 201-206) dari tampilan guru
+            const goodButtons = sortedBehaviors.filter(b => b.type === 'plus' && !(b.id >= 101 && b.id <= 106)).map(b => 
                 `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good">
                     <div class="icon-box"><i class="fas ${b.icon}"></i></div>
                     <div class="behavior-text">${b.label}</div>
@@ -518,7 +521,7 @@
                 </button>`
             ).join('');
 
-            const badButtons = sortedBehaviors.filter(b => b.type === 'minus').map(b => 
+            const badButtons = sortedBehaviors.filter(b => b.type === 'minus' && !(b.id >= 201 && b.id <= 206)).map(b => 
                 `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="list-item-card item-bad">
                     <div class="icon-box"><i class="fas ${b.icon}"></i></div>
                     <div class="behavior-text">${b.label}</div>
@@ -921,7 +924,10 @@
                         <label class="text-xs font-bold text-gray-500 uppercase mt-2 block">Nama Sekolah (Tampil Kecil)</label>
                         <input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-3 border rounded">
                         
-                        <button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl font-bold text-white mt-4">Simpan Profil</button>
+                        <label class="text-xs font-bold text-gray-500 uppercase mt-2 block">Password Guru</label>
+                        <input type="text" id="tPass" value="${schoolData.teacherPassword || 'QA-Poin77'}" class="w-full p-3 border rounded text-red-600 font-bold">
+                        
+                        <button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl font-bold text-white mt-4">Simpan Profil & Password</button>
                     </div>
                     <button onclick="resetAll()" class="w-full py-3 mt-8 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button>
                 </div>`; 
@@ -943,7 +949,13 @@
             Swal.fire({ title: 'Testing...', didOpen: () => { Swal.showLoading(); schoolData.apiUrl = url; saveData(); setTimeout(() => { Swal.fire('Tersimpan', '', 'success'); document.querySelector('#apiUrlInput').value = url; }, 1500); } }); 
         }
 
-        function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; saveData(true); Swal.fire('Tersimpan', '', 'success'); }
+        function saveSettings() { 
+            schoolData.name = document.getElementById('sName').value; 
+            schoolData.location = document.getElementById('sLoc').value; 
+            schoolData.teacherPassword = document.getElementById('tPass').value;
+            saveData(true); 
+            Swal.fire('Tersimpan', '', 'success'); 
+        }
         function resetAll() { Swal.fire({ title: 'Reset Semua?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((r) => { if (r.isConfirmed) { localStorage.clear(); location.href = window.location.pathname; } }); }
 
         // --- CRUD SISWA ---
