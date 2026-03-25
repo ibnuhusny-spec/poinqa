@@ -165,19 +165,19 @@
             { id: 2, type: 'plus', label: 'Membantu Teman', points: 3, icon: 'fa-hand-holding-heart' },
             { id: 3, type: 'plus', label: 'Hafalan Qur\'an', points: 10, icon: 'fa-book-quran' }, 
             // Kontrol Salat 5 Waktu di rumah (Positif)
-            { id: 101, type: 'plus', label: 'Salat Subuh', points: 2, icon: 'fa-cloud-moon' },
-            { id: 102, type: 'plus', label: 'Salat Zuhur', points: 2, icon: 'fa-sun' },
-            { id: 103, type: 'plus', label: 'Salat Asar', points: 2, icon: 'fa-cloud-sun' },
-            { id: 104, type: 'plus', label: 'Salat Magrib', points: 2, icon: 'fa-moon' },
-            { id: 105, type: 'plus', label: 'Salat Isya', points: 2, icon: 'fa-star-and-crescent' },
-            { id: 106, type: 'plus', label: 'Salat Jumat', points: 5, icon: 'fa-users' },
+            { id: 101, type: 'plus', label: 'Salat Subuh', points: 10, icon: 'fa-cloud-moon' },
+            { id: 102, type: 'plus', label: 'Salat Zuhur', points: 10, icon: 'fa-sun' },
+            { id: 103, type: 'plus', label: 'Salat Asar', points: 10, icon: 'fa-cloud-sun' },
+            { id: 104, type: 'plus', label: 'Salat Magrib', points: 10, icon: 'fa-moon' },
+            { id: 105, type: 'plus', label: 'Salat Isya', points: 10, icon: 'fa-star-and-crescent' },
+            { id: 106, type: 'plus', label: 'Salat Jumat', points: 15, icon: 'fa-users' },
             // Kontrol Salat 5 Waktu di rumah (Negatif)
-            { id: 201, type: 'minus', label: 'Tidak Salat Subuh', points: -2, icon: 'fa-cloud-moon' },
-            { id: 202, type: 'minus', label: 'Tidak Salat Zuhur', points: -2, icon: 'fa-sun' },
-            { id: 203, type: 'minus', label: 'Tidak Salat Asar', points: -2, icon: 'fa-cloud-sun' },
-            { id: 204, type: 'minus', label: 'Tidak Salat Magrib', points: -2, icon: 'fa-moon' },
-            { id: 205, type: 'minus', label: 'Tidak Salat Isya', points: -2, icon: 'fa-star-and-crescent' },
-            { id: 206, type: 'minus', label: 'Tidak Salat Jumat', points: -5, icon: 'fa-users' },
+            { id: 201, type: 'minus', label: 'Tidak Salat Subuh', points: -10, icon: 'fa-cloud-moon' },
+            { id: 202, type: 'minus', label: 'Tidak Salat Zuhur', points: -10, icon: 'fa-sun' },
+            { id: 203, type: 'minus', label: 'Tidak Salat Asar', points: -10, icon: 'fa-cloud-sun' },
+            { id: 204, type: 'minus', label: 'Tidak Salat Magrib', points: -10, icon: 'fa-moon' },
+            { id: 205, type: 'minus', label: 'Tidak Salat Isya', points: -10, icon: 'fa-star-and-crescent' },
+            { id: 206, type: 'minus', label: 'Tidak Salat Jumat', points: -15, icon: 'fa-users' },
             // Perilaku Buruk
             { id: 4, type: 'minus', label: 'Terlambat', points: -5, icon: 'fa-person-running' }, 
             { id: 5, type: 'minus', label: 'Tidak Mengerjakan PR', points: -10, icon: 'fa-book-open' },
@@ -967,10 +967,11 @@
             let list = sorted.map(b => { 
                 const idx = behaviors.findIndex(x => x.id === b.id); 
                 const isSystem = (b.id >= 101 && b.id <= 106) || (b.id >= 201 && b.id <= 206);
-                const actionBtn = isSystem ? `<span class="text-[10px] text-gray-400 italic px-2">Sistem</span>` : `<button onclick="delBehavior(${idx})" class="text-gray-400 hover:text-red-500 px-2"><i class="fas fa-trash"></i></button>`;
+                const editBtn = `<button onclick="editBehavior(${idx})" class="text-blue-500 hover:text-blue-600 px-2"><i class="fas fa-edit"></i></button>`;
+                const delBtn = isSystem ? `<span class="text-[10px] text-gray-400 italic px-2">Sistem</span>` : `<button onclick="delBehavior(${idx})" class="text-gray-400 hover:text-red-500 px-2"><i class="fas fa-trash"></i></button>`;
                 return `<div class="list-item-card ${b.type==='plus'?'item-good':'item-bad'} mb-2">
                     <div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><span class="behavior-text">${b.label}</span></div>
-                    <div class="flex items-center gap-2"><span class="point-badge">${b.points}</span>${actionBtn}</div>
+                    <div class="flex items-center gap-1"><span class="point-badge mr-1">${b.points}</span>${editBtn}${delBtn}</div>
                 </div>`; 
             }).join(''); 
             
@@ -981,6 +982,35 @@
                     <button onclick="addNewBehaviorPrompt()" class="btn-3d btn-blue w-full py-3 rounded-lg mb-4">Tambah Item Baru</button>
                 </div>`; 
             document.getElementById('appContent').innerHTML = html; 
+        }
+
+        function editBehavior(idx) {
+            const b = behaviors[idx];
+            Swal.fire({ 
+                title: 'Edit Poin / Nama',
+                html: `<input id="editL" class="swal2-input" value="${b.label}" placeholder="Nama Perilaku">
+                       <input id="editP" type="number" class="swal2-input" value="${Math.abs(b.points)}" placeholder="Poin (Angka)">`, 
+                showCancelButton: true,
+                confirmButtonText: 'Simpan',
+                cancelButtonText: 'Batal',
+                preConfirm: () => { 
+                    const l = document.getElementById('editL').value.trim(); 
+                    let p = parseInt(document.getElementById('editP').value); 
+                    if(!l || isNaN(p) || p <= 0) {
+                        Swal.showValidationMessage('Nama dan Poin (minimal 1) harus diisi!');
+                        return false;
+                    }
+                    return { label: l, points: p };
+                } 
+            }).then((result) => {
+                if(result.isConfirmed) {
+                    behaviors[idx].label = result.value.label;
+                    behaviors[idx].points = b.type === 'minus' ? -Math.abs(result.value.points) : Math.abs(result.value.points);
+                    saveData(); 
+                    renderManageBehaviors();
+                    Swal.fire({ title: 'Tersimpan!', icon: 'success', timer: 1000, showConfirmButton: false });
+                }
+            }); 
         }
 
         function addNewBehaviorPrompt() { 
