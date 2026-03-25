@@ -188,6 +188,7 @@
 
         let schoolData, students, logs, behaviors;
         let currentScreen = 'splash';
+        let currentViewedNis = null; // Menyimpan NIS yang sedang dilihat (Bagus untuk Background Sync)
         let tempAddPhoto = ""; 
         let isStudentModeOnly = false;
 
@@ -353,14 +354,42 @@
             }, 2000);
         }
 
-        function loadFromCloud(isManual = false) {
+        // Fungsi Pintar: Refresh layar aktif tanpa kedip saat background sync
+        function refreshActiveUI() {
+            if(currentScreen === 'teacher_dashboard') renderTeacherDashboard();
+            if(currentScreen === 'manage_behaviors') renderManageBehaviors();
+            if(currentScreen === 'teacher_detail' && currentViewedNis) {
+                const activeTabEl = document.querySelector('.tab-btn[class*="tab-active-"]');
+                let activeTab = 'good';
+                if(activeTabEl) {
+                    if(activeTabEl.id.includes('bad')) activeTab = 'bad';
+                    if(activeTabEl.id.includes('note')) activeTab = 'note';
+                }
+                renderStudentDetail(currentViewedNis, activeTab);
+            }
+            if(currentScreen === 'student_dashboard' && currentViewedNis) {
+                const currentStudent = students.find(x => String(x.nis).trim() === String(currentViewedNis).trim());
+                if(currentStudent) {
+                    const activeTabEl = document.querySelector('.tab-btn[class*="tab-active-"]');
+                    let activeTab = 'good';
+                    if(activeTabEl) {
+                        if(activeTabEl.id.includes('bad')) activeTab = 'bad';
+                        if(activeTabEl.id.includes('salat')) activeTab = 'salat';
+                        if(activeTabEl.id.includes('note')) activeTab = 'note';
+                    }
+                    renderStudentDashboard(currentStudent, activeTab);
+                }
+            }
+        }
+
+        function loadFromCloud(isManual = false, customCallback = null) {
             if(!schoolData.apiUrl) return;
             updateSyncUI('loading');
             
             fetch(schoolData.apiUrl + '?action=read&t=' + Date.now())
             .then(r => r.json())
             .then(data => {
-                if(isManual) Swal.close();
+                if(isManual && !customCallback) Swal.close();
                 if(data.students && Array.isArray(data.students)) {
                     students = data.students.map(cloudS => {
                         const localS = students.find(l => String(l.nis) === String(cloudS.nis));
@@ -379,16 +408,19 @@
                     }
                     
                     saveData(true); updateSyncUI('success');
-                    if(isManual) Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(() => {
-                        if(currentScreen === 'teacher_dashboard') renderTeacherDashboard();
-                        if(currentScreen === 'manage_behaviors') renderManageBehaviors();
-                        if(currentScreen === 'student_dashboard') {
-                            const lockedNis = localStorage.getItem('lockedStudentNis');
-                            if(lockedNis) handleAutoLogin(lockedNis);
-                        }
-                    });
+                    
+                    if (customCallback) {
+                        customCallback();
+                    } else if (isManual) {
+                        Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(refreshActiveUI);
+                    } else {
+                        refreshActiveUI();
+                    }
                 }
-            }).catch(e => { if(isManual) Swal.fire('Gagal', 'Koneksi error.', 'error'); updateSyncUI('error'); });
+            }).catch(e => { 
+                if(isManual || customCallback) Swal.fire('Gagal', 'Koneksi internet tidak stabil.', 'error'); 
+                updateSyncUI('error'); 
+            });
         }
         function forcePull() { loadFromCloud(true); }
 
@@ -491,6 +523,7 @@
         // 3. Teacher Dashboard
         function renderTeacherDashboard() {
             currentScreen = 'teacher_dashboard';
+            currentViewedNis = null;
             let listHTML = students.length === 0 ? `<div class="text-center py-10 text-gray-400"><i class="fas fa-users-slash text-4xl mb-2"></i><br>Belum ada data siswa.</div>` : '';
             
             students.forEach(s => {
@@ -538,6 +571,7 @@
         // 4. Student Detail (Teacher Mode)
         function renderStudentDetail(nis, activeTab = 'good') {
             currentScreen = 'teacher_detail';
+            currentViewedNis = nis;
             const student = students.find(s => String(s.nis) === String(nis)); if(!student) return;
             
             const studentLogs = logs.filter(l => String(l.studentId) === String(nis));
@@ -759,17 +793,34 @@
 
         function handleLoginManual() {
             const nis = document.getElementById('loginNis').value.trim(); 
+            if(!nis) return Swal.fire('Tunggu', 'Masukkan NIS terlebih dahulu!', 'warning');
             handleAutoLogin(nis);
         }
 
         window.handleAutoLogin = function(nis) { 
             const s = students.find(x => String(x.nis).trim() === String(nis).trim()); 
-            if(s) renderStudentDashboard(s); 
-            else { 
+            if(s) {
+                renderStudentDashboard(s); 
+                // Otomatis tarik data terbaru di background tanpa menggangu layar
+                if(schoolData.apiUrl) loadFromCloud(false); 
+            } else { 
                 if(schoolData.apiUrl) { 
-                    Swal.fire({ title: 'Mencari...', didOpen: () => { Swal.showLoading(); loadFromCloud(true); setTimeout(() => { Swal.close(); const found = students.find(x => String(x.nis).trim() === String(nis).trim()); if(found) renderStudentDashboard(found); else { Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); } }, 2000); }}); 
+                    currentViewedNis = nis;
+                    currentScreen = 'student_dashboard'; 
+                    Swal.fire({ title: 'Menyiapkan Profil...', didOpen: () => { Swal.showLoading(); }}); 
+                    
+                    loadFromCloud(false, function onComplete() {
+                        const found = students.find(x => String(x.nis).trim() === String(nis).trim()); 
+                        if(found) {
+                            Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(() => renderStudentDashboard(found));
+                        } else { 
+                            Swal.fire('Gagal', 'NIS tidak ditemukan di sistem sekolah.', 'error'); 
+                            localStorage.removeItem('lockedStudentNis'); 
+                            renderSplash(); 
+                        }
+                    });
                 } else {
-                    Swal.fire('Gagal', 'NIS tidak ditemukan', 'error'); 
+                    Swal.fire('Gagal', 'NIS tidak ditemukan dan sistem sedang offline.', 'error'); 
                     localStorage.removeItem('lockedStudentNis');
                     renderSplash();
                 }
@@ -778,6 +829,7 @@
 
         function renderStudentDashboard(s, activeTab = 'good') {
             currentScreen = 'student_dashboard';
+            currentViewedNis = s.nis;
             const myLogs = logs.filter(l => String(l.studentId) === String(s.nis)).sort((a,b) => b.id - a.id);
             const posPoints = myLogs.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0);
             const negPoints = myLogs.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0);
@@ -1363,9 +1415,15 @@
 
         window.onload = function() { 
             checkAutoConfig(); 
-            if(!isStudentModeOnly && !localStorage.getItem('lockedStudentNis')) renderSplash(); 
-            if(schoolData.apiUrl) setTimeout(() => loadFromCloud(false), 500); 
-            else if(isStudentModeOnly || localStorage.getItem('lockedStudentNis')) renderSplash(); // Pastikan splash termuat jika offline
+            let lockedNis = localStorage.getItem('lockedStudentNis');
+            
+            if (lockedNis) {
+                // Auto login langsung memotong splash screen & tidak membiarkan layar kosong
+                handleAutoLogin(lockedNis);
+            } else {
+                renderSplash(); 
+                if(schoolData.apiUrl) setTimeout(() => loadFromCloud(false), 500); 
+            }
         };
     </script>
 </body>
