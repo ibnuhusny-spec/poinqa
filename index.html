@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>POINKU PRO - Sistem Poin Siswa</title>
     
-    <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;900&display=swap" rel="stylesheet">
@@ -50,11 +49,6 @@
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800">
 
-    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
-    <form id="syncForm" method="POST" target="hidden_iframe" style="display:none;">
-        <input type="hidden" name="data" id="syncDataInput">
-    </form>
-    
     <input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none" onchange="processExcel(event)">
 
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative overflow-hidden flex flex-col">
@@ -72,7 +66,7 @@
     </div>
 
     <script>
-        const defaultSchoolData = { name: "6", location: "Nama Sekolah", city: "Kabupaten Maros", logo: "logo.png", apiUrl: "", teacherPassword: "QA-Poin77" };
+        const defaultSchoolData = { name: "6", location: "Nama Sekolah", city: "Kabupaten Maros", logo: "logo.png", apiUrl: "", teacherPassword: "QA-Poin77", lastUpdate: 0 };
         const initialBehaviors = [
             { id: 1, type: 'plus', label: 'Sholat Dhuha', points: 5, icon: 'fa-person-praying' }, 
             { id: 2, type: 'plus', label: 'Membantu Teman', points: 3, icon: 'fa-hand-holding-heart' },
@@ -118,13 +112,16 @@
         try {
             schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
             if(!schoolData.city) schoolData.city = "Kabupaten Maros";
+            if(!schoolData.lastUpdate) schoolData.lastUpdate = 0; // Stempel waktu ditambahkan
             students = JSON.parse(localStorage.getItem('students')) || [];
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
             if (ensureSystemBehaviors()) { localStorage.setItem('behaviors', JSON.stringify(behaviors)); }
         } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; }
 
+        // MEMBERI STEMPEL WAKTU SETIAP KALI DISIMPAN
         function saveData(skipCloud = false) {
+            schoolData.lastUpdate = Date.now();
             localStorage.setItem('schoolData', JSON.stringify(schoolData));
             localStorage.setItem('students', JSON.stringify(students));
             localStorage.setItem('logs', JSON.stringify(logs));
@@ -159,21 +156,43 @@
         function doRefresh() { if(schoolData.apiUrl) { Swal.fire({ title: 'Menyegarkan Data...', didOpen: () => { Swal.showLoading(); loadFromCloud(true); } }); } else location.reload(); }
 
         let debounceTimer;
+        let isSyncing = false, pendingSync = false;
+
         function updateSyncUI(status) {
             const dot = document.getElementById('syncDot'), txt = document.getElementById('syncText');
-            if(status === 'loading') { dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerText = "Sync..."; }
-            else if(status === 'success') { dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Online"; }
-            else { dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; }
+            if(status === 'loading') { isSyncing = true; dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse"; txt.innerText = "Sync..."; }
+            else if(status === 'success') { isSyncing = false; pendingSync = false; dot.className = "w-2 h-2 rounded-full bg-green-500"; txt.innerText = "Online"; }
+            else { isSyncing = false; dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; }
         }
 
+        // PERINGATAN TUTUP APLIKASI
+        window.addEventListener('beforeunload', function (e) {
+            if (isSyncing || pendingSync) { e.preventDefault(); e.returnValue = 'Data sedang disimpan ke Cloud. Yakin ingin keluar?'; }
+        });
+
+        // MESIN SINKRONISASI BARU (FETCH MODERN + INSTAN)
         function syncToCloud() {
-            if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); updateSyncUI('loading');
+            if(!schoolData.apiUrl) return; 
+            clearTimeout(debounceTimer); 
+            pendingSync = true;
+            updateSyncUI('loading');
+            
             const lightStudents = students.map(s => { const { photo, studentPhoto, teacherCoverPhoto, studentCoverPhoto, ...sisa } = s; return sisa; });
             const payload = { schoolData: {...schoolData, logo:""}, students: lightStudents, logs, behaviors };
+            
+            // Pengiriman instan, dipercepat menjadi 0.5 detik
             debounceTimer = setTimeout(() => {
-                const form = document.getElementById('syncForm'), input = document.getElementById('syncDataInput');
-                if(form && input) { try { form.action = schoolData.apiUrl; input.value = JSON.stringify(payload); form.submit(); setTimeout(() => updateSyncUI('success'), 1500); } catch(e) { updateSyncUI('error'); } }
-            }, 2000);
+                fetch(schoolData.apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ data: JSON.stringify(payload) }),
+                    mode: 'no-cors'
+                }).then(() => {
+                    updateSyncUI('success');
+                }).catch(() => {
+                    updateSyncUI('error');
+                });
+            }, 500);
         }
 
         function refreshActiveUI() {
@@ -186,23 +205,42 @@
             }
         }
 
+        // MESIN UNDUH DATA ANTI-HILANG
         function loadFromCloud(isManual = false, customCallback = null) {
             if(!schoolData.apiUrl) return; updateSyncUI('loading');
             fetch(schoolData.apiUrl + '?action=read&t=' + Date.now()).then(r => r.json()).then(data => {
                 if(isManual && !customCallback) Swal.close();
-                if(data.students && Array.isArray(data.students)) {
-                    students = data.students.map(cloudS => {
-                        const localS = students.find(l => String(l.nis) === String(cloudS.nis));
-                        return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
-                    });
-                    if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
-                    if(data.behaviors) { behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)})); ensureSystemBehaviors(); }
-                    saveData(true); updateSyncUI('success');
-                    if (customCallback) customCallback(); else if (isManual) Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(refreshActiveUI); else refreshActiveUI();
+                
+                const cloudTime = data.schoolData?.lastUpdate || 0;
+                const localTime = schoolData.lastUpdate || 0;
+
+                // PROTEKSI DATA: Jika cloud lebih baru, ATAU ditarik manual (refresh), ATAU HP masih kosong, baru terima data dari Cloud
+                if (cloudTime >= localTime || isManual || (students.length === 0 && data.students?.length > 0)) {
+                    if(data.students && Array.isArray(data.students)) {
+                        students = data.students.map(cloudS => {
+                            const localS = students.find(l => String(l.nis) === String(cloudS.nis));
+                            return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
+                        });
+                        if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
+                        if(data.behaviors) { behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)})); ensureSystemBehaviors(); }
+                        if(data.schoolData) schoolData = {...schoolData, ...data.schoolData};
+                        
+                        localStorage.setItem('schoolData', JSON.stringify(schoolData));
+                        localStorage.setItem('students', JSON.stringify(students));
+                        localStorage.setItem('logs', JSON.stringify(logs));
+                        localStorage.setItem('behaviors', JSON.stringify(behaviors));
+                        
+                        updateSyncUI('success');
+                        if (customCallback) customCallback(); else if (isManual) Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(refreshActiveUI); else refreshActiveUI();
+                    }
+                } else {
+                    // Data di HP lebih baru (karena kemarin gagal terkirim / ditutup terlalu cepat). Tolak data awan, dan paksa kirim data HP ke awan!
+                    updateSyncUI('success');
+                    syncToCloud();
+                    if (customCallback) customCallback(); else refreshActiveUI();
                 }
             }).catch(e => { if(isManual || customCallback) Swal.fire('Gagal', 'Koneksi internet error.', 'error'); updateSyncUI('error'); });
         }
-        function forcePull() { loadFromCloud(true); }
 
         function compressImage(file, isCover = false) { 
             return new Promise((resolve) => { 
@@ -350,29 +388,13 @@
             if (typeof ExcelJS === 'undefined') { await new Promise((res) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js'; s.onload = res; document.head.appendChild(s); }); }
             const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Rekap Poin');
 
-            // --- LOGIKA KOP DINAMIS & ANTI DOUBLE KELAS ---
             let rawName = (schoolData.name || "").toUpperCase();
             let headerText = "DAFTAR AKUMULASI POIN";
-            if (rawName.startsWith("KELAS")) {
-                headerText += " " + rawName;
-            } else {
-                headerText += " KELAS " + rawName;
-            }
+            if (rawName.startsWith("KELAS")) { headerText += " " + rawName; } else { headerText += " KELAS " + rawName; }
 
-            ws.mergeCells('A1:H1');
-            ws.getCell('A1').value = headerText;
-            ws.getCell('A1').font = { size: 16, bold: true, color: { argb: 'FF1E3A8A' } };
-            ws.getCell('A1').alignment = { horizontal: 'center' };
-
-            ws.mergeCells('A2:H2');
-            ws.getCell('A2').value = (schoolData.location || "NAMA SEKOLAH").toUpperCase();
-            ws.getCell('A2').font = { size: 14, bold: true, color: { argb: 'FF15803D' } }; 
-            ws.getCell('A2').alignment = { horizontal: 'center' };
-
-            ws.mergeCells('A3:H3');
-            ws.getCell('A3').value = (schoolData.city || "KABUPATEN MAROS").toUpperCase();
-            ws.getCell('A3').font = { size: 12, bold: true };
-            ws.getCell('A3').alignment = { horizontal: 'center' };
+            ws.mergeCells('A1:H1'); ws.getCell('A1').value = headerText; ws.getCell('A1').font = { size: 16, bold: true, color: { argb: 'FF1E3A8A' } }; ws.getCell('A1').alignment = { horizontal: 'center' };
+            ws.mergeCells('A2:H2'); ws.getCell('A2').value = (schoolData.location || "NAMA SEKOLAH").toUpperCase(); ws.getCell('A2').font = { size: 14, bold: true, color: { argb: 'FF15803D' } }; ws.getCell('A2').alignment = { horizontal: 'center' };
+            ws.mergeCells('A3:H3'); ws.getCell('A3').value = (schoolData.city || "KABUPATEN MAROS").toUpperCase(); ws.getCell('A3').font = { size: 12, bold: true }; ws.getCell('A3').alignment = { horizontal: 'center' };
 
             ws.addRow([]); 
             const hr = ws.addRow(['No', 'NIS', 'Nama Lengkap Siswa', 'Kelas', 'Tanggal Lahir', 'Total Positif', 'Total Negatif', 'Poin Akhir']);
