@@ -49,6 +49,11 @@
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800">
 
+    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+    <form id="syncForm" method="POST" target="hidden_iframe" style="display:none;">
+        <input type="hidden" name="data" id="syncDataInput">
+    </form>
+    
     <input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none" onchange="processExcel(event)">
 
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative overflow-hidden flex flex-col">
@@ -112,14 +117,13 @@
         try {
             schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
             if(!schoolData.city) schoolData.city = "Kabupaten Maros";
-            if(!schoolData.lastUpdate) schoolData.lastUpdate = 0; // Stempel waktu ditambahkan
+            if(!schoolData.lastUpdate) schoolData.lastUpdate = 0;
             students = JSON.parse(localStorage.getItem('students')) || [];
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
             if (ensureSystemBehaviors()) { localStorage.setItem('behaviors', JSON.stringify(behaviors)); }
         } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; }
 
-        // MEMBERI STEMPEL WAKTU SETIAP KALI DISIMPAN
         function saveData(skipCloud = false) {
             schoolData.lastUpdate = Date.now();
             localStorage.setItem('schoolData', JSON.stringify(schoolData));
@@ -165,12 +169,10 @@
             else { isSyncing = false; dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; }
         }
 
-        // PERINGATAN TUTUP APLIKASI
         window.addEventListener('beforeunload', function (e) {
             if (isSyncing || pendingSync) { e.preventDefault(); e.returnValue = 'Data sedang disimpan ke Cloud. Yakin ingin keluar?'; }
         });
 
-        // MESIN SINKRONISASI BARU (FETCH MODERN + INSTAN)
         function syncToCloud() {
             if(!schoolData.apiUrl) return; 
             clearTimeout(debounceTimer); 
@@ -180,19 +182,31 @@
             const lightStudents = students.map(s => { const { photo, studentPhoto, teacherCoverPhoto, studentCoverPhoto, ...sisa } = s; return sisa; });
             const payload = { schoolData: {...schoolData, logo:""}, students: lightStudents, logs, behaviors };
             
-            // Pengiriman instan, dipercepat menjadi 0.5 detik
             debounceTimer = setTimeout(() => {
-                fetch(schoolData.apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ data: JSON.stringify(payload) }),
-                    mode: 'no-cors'
-                }).then(() => {
-                    updateSyncUI('success');
-                }).catch(() => {
-                    updateSyncUI('error');
-                });
-            }, 500);
+                try {
+                    fetch(schoolData.apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({ data: JSON.stringify(payload) }),
+                        mode: 'no-cors',
+                        keepalive: true 
+                    }).then(() => {
+                        updateSyncUI('success');
+                    }).catch(() => {
+                        fallbackSync(payload);
+                    });
+                } catch (e) {
+                    fallbackSync(payload);
+                }
+            }, 300);
+        }
+
+        function fallbackSync(payload) {
+            const form = document.getElementById('syncForm'), input = document.getElementById('syncDataInput');
+            if(form && input) { 
+                try { form.action = schoolData.apiUrl; input.value = JSON.stringify(payload); form.submit(); setTimeout(() => updateSyncUI('success'), 1000); } 
+                catch(e) { updateSyncUI('error'); } 
+            }
         }
 
         function refreshActiveUI() {
@@ -205,7 +219,6 @@
             }
         }
 
-        // MESIN UNDUH DATA ANTI-HILANG
         function loadFromCloud(isManual = false, customCallback = null) {
             if(!schoolData.apiUrl) return; updateSyncUI('loading');
             fetch(schoolData.apiUrl + '?action=read&t=' + Date.now()).then(r => r.json()).then(data => {
@@ -214,7 +227,6 @@
                 const cloudTime = data.schoolData?.lastUpdate || 0;
                 const localTime = schoolData.lastUpdate || 0;
 
-                // PROTEKSI DATA: Jika cloud lebih baru, ATAU ditarik manual (refresh), ATAU HP masih kosong, baru terima data dari Cloud
                 if (cloudTime >= localTime || isManual || (students.length === 0 && data.students?.length > 0)) {
                     if(data.students && Array.isArray(data.students)) {
                         students = data.students.map(cloudS => {
@@ -234,13 +246,13 @@
                         if (customCallback) customCallback(); else if (isManual) Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(refreshActiveUI); else refreshActiveUI();
                     }
                 } else {
-                    // Data di HP lebih baru (karena kemarin gagal terkirim / ditutup terlalu cepat). Tolak data awan, dan paksa kirim data HP ke awan!
                     updateSyncUI('success');
                     syncToCloud();
                     if (customCallback) customCallback(); else refreshActiveUI();
                 }
             }).catch(e => { if(isManual || customCallback) Swal.fire('Gagal', 'Koneksi internet error.', 'error'); updateSyncUI('error'); });
         }
+        function forcePull() { loadFromCloud(true); }
 
         function compressImage(file, isCover = false) { 
             return new Promise((resolve) => { 
@@ -348,7 +360,45 @@
         }
 
         function copyShareLink() { if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting', 'error'); const bu = window.location.href.split('?')[0], fl = `${bu}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&city=${encodeURIComponent(schoolData.city)}&mode=student`; const el = document.createElement('textarea'); el.value = fl; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); Swal.fire({ title: 'Link Umum Tersalin!', icon: 'success' }); }
-        function checkConnectionAndSave(url) { if(!url) return Swal.fire('Error', 'URL Kosong', 'error'); if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; Swal.fire({ title: 'Testing...', didOpen: () => { Swal.showLoading(); schoolData.apiUrl = url; saveData(); setTimeout(() => { Swal.fire('Tersimpan', '', 'success'); document.querySelector('#apiUrlInput').value = url; }, 1500); } }); }
+        
+        // =========================================================
+        // KODE TERBARU: MENCEGAH HAPUS DATA SAAT CHROME DI-RESET
+        // =========================================================
+        function checkConnectionAndSave(url) { 
+            if(!url) return Swal.fire('Error', 'URL Kosong', 'error'); 
+            if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; 
+            
+            Swal.fire({ title: 'Menghubungkan & Memeriksa Awan...', didOpen: () => { Swal.showLoading(); } }); 
+            
+            fetch(url + '?action=read&t=' + Date.now())
+            .then(r => r.json())
+            .then(data => {
+                schoolData.apiUrl = url;
+                
+                if(data.students && data.students.length > 0) {
+                    schoolData = {...schoolData, ...data.schoolData, apiUrl: url};
+                    students = data.students;
+                    if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
+                    if(data.behaviors) behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
+                    
+                    saveData(true); 
+                    
+                    Swal.fire('Berhasil Terhubung!', 'Data lama Anda berhasil ditarik kembali dari awan.', 'success').then(() => {
+                        document.querySelector('#apiUrlInput').value = url;
+                        location.reload(); 
+                    });
+                } else {
+                    saveData(); 
+                    Swal.fire('Tersimpan', 'Aplikasi terhubung ke database baru.', 'success');
+                    document.querySelector('#apiUrlInput').value = url;
+                }
+            })
+            .catch(e => {
+                Swal.fire('Error', 'Gagal menghubungi Google Script. Pastikan link benar.', 'error');
+            });
+        }
+        // =========================================================
+
         function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; schoolData.city = document.getElementById('sCity').value; schoolData.teacherPassword = document.getElementById('tPass').value; saveData(true); Swal.fire('Tersimpan', '', 'success'); }
         function resetAll() { Swal.fire({ title: 'Reset Semua?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((r) => { if (r.isConfirmed) { localStorage.clear(); location.href = window.location.pathname; } }); }
 
