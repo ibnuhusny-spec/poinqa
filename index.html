@@ -72,7 +72,6 @@
     </div>
 
     <script>
-        // Gunakan path absolut './logo.png' agar browser mencari di folder yang sama
         const defaultSchoolData = { name: "6", location: "Nama Sekolah", city: "Kabupaten Maros", logo: "./logo.png", apiUrl: "", teacherPassword: "QA-Poin77", lastUpdate: 0 };
         const initialBehaviors = [
             { id: 1, type: 'plus', label: 'Sholat Dhuha', points: 5, icon: 'fa-person-praying' }, 
@@ -95,9 +94,9 @@
             { id: 6, type: 'minus', label: 'Berkelahi / Gaduh', points: -15, icon: 'fa-user-injured' }
         ];
 
-        let schoolData, students, logs, behaviors;
+        let schoolData, students, logs, behaviors, deletedLogIds;
         let currentScreen = 'splash', currentViewedNis = null, tempAddPhoto = "", isStudentModeOnly = false;
-        let lastActionTime = 0, spamCounter = 0;
+        let lastActionTime = 0, spamCounter = 0, debounceTimer, isSyncing = false, pendingSync = false;
 
         function isSpamDetected() {
             const now = Date.now();
@@ -108,23 +107,20 @@
 
         function ensureSystemBehaviors() {
             const systemIDs = [101, 102, 103, 104, 105, 106, 201, 202, 203, 204, 205, 206];
-            let isChanged = false;
             systemIDs.forEach(id => {
-                const existingIdx = behaviors.findIndex(b => String(b.id) === String(id));
-                if (existingIdx === -1) { const newB = initialBehaviors.find(b => String(b.id) === String(id)); if(newB) { behaviors.push({...newB}); isChanged = true; } }
+                if (behaviors.findIndex(b => String(b.id) === String(id)) === -1) { const newB = initialBehaviors.find(b => String(b.id) === String(id)); if(newB) behaviors.push({...newB}); }
             });
-            return isChanged;
         }
 
         try {
             schoolData = JSON.parse(localStorage.getItem('schoolData')) || defaultSchoolData;
-            if(!schoolData.city) schoolData.city = "Kabupaten Maros";
-            if(!schoolData.lastUpdate) schoolData.lastUpdate = 0;
+            if(!schoolData.city) schoolData.city = "Kabupaten Maros"; if(!schoolData.lastUpdate) schoolData.lastUpdate = 0;
             students = JSON.parse(localStorage.getItem('students')) || [];
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
-            if (ensureSystemBehaviors()) { localStorage.setItem('behaviors', JSON.stringify(behaviors)); }
-        } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; }
+            deletedLogIds = JSON.parse(localStorage.getItem('deletedLogIds')) || [];
+            ensureSystemBehaviors();
+        } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; deletedLogIds = []; }
 
         function saveData(skipCloud = false) {
             schoolData.lastUpdate = Date.now();
@@ -132,6 +128,7 @@
             localStorage.setItem('students', JSON.stringify(students));
             localStorage.setItem('logs', JSON.stringify(logs));
             localStorage.setItem('behaviors', JSON.stringify(behaviors));
+            localStorage.setItem('deletedLogIds', JSON.stringify(deletedLogIds));
             if (!skipCloud && schoolData.apiUrl) syncToCloud();
         }
 
@@ -140,13 +137,12 @@
             const apiLink = params.get('api'), sName = params.get('school'), sLoc = params.get('loc'), sCity = params.get('city'), mode = params.get('mode'), lockNis = params.get('nis');
             if (mode === 'student_locked' && lockNis) { localStorage.setItem('lockedStudentNis', lockNis); isStudentModeOnly = true; } 
             else if (mode === 'student') { isStudentModeOnly = true; }
-            let isUpdated = false;
-            if (apiLink && apiLink !== schoolData.apiUrl) { schoolData.apiUrl = apiLink; isUpdated = true; }
-            if (sName && sName !== schoolData.name) { schoolData.name = decodeURIComponent(sName); isUpdated = true; }
-            if (sLoc && sLoc !== schoolData.location) { schoolData.location = decodeURIComponent(sLoc); isUpdated = true; }
-            if (sCity && sCity !== schoolData.city) { schoolData.city = decodeURIComponent(sCity); isUpdated = true; }
-            if (isUpdated || mode) { if (isUpdated) saveData(true); window.history.replaceState({}, document.title, window.location.pathname); }
-            return false;
+            let isUpd = false;
+            if (apiLink && apiLink !== schoolData.apiUrl) { schoolData.apiUrl = apiLink; isUpd = true; }
+            if (sName && sName !== schoolData.name) { schoolData.name = decodeURIComponent(sName); isUpd = true; }
+            if (sLoc && sLoc !== schoolData.location) { schoolData.location = decodeURIComponent(sLoc); isUpd = true; }
+            if (sCity && sCity !== schoolData.city) { schoolData.city = decodeURIComponent(sCity); isUpd = true; }
+            if (isUpd || mode) { if (isUpd) saveData(true); window.history.replaceState({}, document.title, window.location.pathname); }
         }
 
         function goHome() { if(currentScreen !== 'splash') { if (localStorage.getItem('lockedStudentNis')) handleAutoLogin(localStorage.getItem('lockedStudentNis')); else if (isStudentModeOnly) renderStudentLogin(); else renderModeSelection(); } }
@@ -158,11 +154,8 @@
             else if (currentScreen === 'mode_selection') renderSplash(); 
         }
 
-        function shutdownApp() { Swal.fire({ title: 'Keluar Aplikasi?', text: "Anda akan kembali ke layar utama.", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Ya, Keluar!' }).then((result) => { if (result.isConfirmed) renderSplash(); }); }
-        function doRefresh() { if(schoolData.apiUrl) { Swal.fire({ title: 'Menyegarkan Data...', didOpen: () => { Swal.showLoading(); loadFromCloud(true); } }); } else location.reload(); }
-
-        let debounceTimer;
-        let isSyncing = false, pendingSync = false;
+        function shutdownApp() { Swal.fire({ title: 'Keluar Aplikasi?', text: "Anda akan kembali ke layar utama.", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Ya' }).then((r) => { if (r.isConfirmed) renderSplash(); }); }
+        function doRefresh() { if(schoolData.apiUrl) { loadFromCloud(true); } else location.reload(); }
 
         function updateSyncUI(status) {
             const dot = document.getElementById('syncDot'), txt = document.getElementById('syncText');
@@ -171,34 +164,101 @@
             else { isSyncing = false; dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; }
         }
 
-        window.addEventListener('beforeunload', function (e) {
-            if (isSyncing || pendingSync) { e.preventDefault(); e.returnValue = 'Data sedang disimpan ke Cloud. Yakin ingin keluar?'; }
-        });
+        window.addEventListener('beforeunload', function (e) { if (isSyncing || pendingSync) { e.preventDefault(); e.returnValue = ''; } });
 
+        // =========================================================================
+        // SISTEM ATOMIC SYNC (ANTI TABRAKAN / ANTI HILANG)
+        // =========================================================================
         function syncToCloud() {
-            if(!schoolData.apiUrl) return; 
-            clearTimeout(debounceTimer); 
-            pendingSync = true;
-            updateSyncUI('loading');
+            if(!schoolData.apiUrl) return; clearTimeout(debounceTimer); pendingSync = true; updateSyncUI('loading');
             const lightStudents = students.map(s => { const { photo, studentPhoto, teacherCoverPhoto, studentCoverPhoto, ...sisa } = s; return sisa; });
-            const payload = { schoolData: {...schoolData}, students: lightStudents, logs, behaviors };
+            const payload = { schoolData, students: lightStudents, logs, behaviors, deletedLogIds };
+            
             debounceTimer = setTimeout(() => {
-                try {
-                    fetch(schoolData.apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: new URLSearchParams({ data: JSON.stringify(payload) }),
-                        mode: 'no-cors',
-                        keepalive: true 
-                    }).then(() => { updateSyncUI('success'); }).catch(() => { fallbackSync(payload); });
-                } catch (e) { fallbackSync(payload); }
+                fetch(schoolData.apiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ data: JSON.stringify(payload) }), mode: 'no-cors', keepalive: true 
+                }).then(() => updateSyncUI('success')).catch(() => {
+                    const form = document.getElementById('syncForm'), input = document.getElementById('syncDataInput');
+                    if(form && input) { form.action = schoolData.apiUrl; input.value = JSON.stringify(payload); form.submit(); setTimeout(() => updateSyncUI('success'), 1000); }
+                });
             }, 300);
         }
 
-        function fallbackSync(payload) {
-            const form = document.getElementById('syncForm'), input = document.getElementById('syncDataInput');
-            if(form && input) { try { form.action = schoolData.apiUrl; input.value = JSON.stringify(payload); form.submit(); setTimeout(() => updateSyncUI('success'), 1000); } catch(e) { updateSyncUI('error'); } }
+        function performAtomicSync(actionCallback, successMsg, uiCallback) {
+            if(!schoolData.apiUrl) {
+                actionCallback(); saveData(false);
+                if(successMsg) Swal.fire('Tersimpan', successMsg, 'success').then(uiCallback); else { if(uiCallback) uiCallback(); }
+                return;
+            }
+            Swal.fire({title: 'Memproses Data...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+            
+            fetch(schoolData.apiUrl + '?action=read&t=' + Date.now()).then(r => r.json()).then(data => {
+                let cloudDeleted = data.deletedLogIds || [];
+                deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
+
+                let logMap = new Map();
+                (data.logs || []).forEach(l => logMap.set(l.id, l));
+                logs.forEach(l => logMap.set(l.id, l)); 
+                logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
+
+                if(data.students && data.students.length > 0) {
+                    students = data.students.map(cloudS => {
+                        const localS = students.find(l => String(l.nis) === String(cloudS.nis));
+                        return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
+                    });
+                }
+                if(data.behaviors) behaviors = data.behaviors;
+                
+                actionCallback(); // Apply action after merge
+                saveData(false); // Trigger save and sync
+                
+                if(successMsg) Swal.fire({title: 'Berhasil!', text: successMsg, icon: 'success', timer: 1500, showConfirmButton: false}).then(uiCallback);
+                else { Swal.close(); if(uiCallback) uiCallback(); }
+            }).catch(e => {
+                actionCallback(); saveData(false);
+                if(successMsg) Swal.fire('Tersimpan Lokal', 'Sinyal terputus. Data disimpan di HP.', 'success').then(uiCallback);
+                else { Swal.close(); if(uiCallback) uiCallback(); }
+            });
         }
+
+        function loadFromCloud(isManual = false) {
+            if(!schoolData.apiUrl) return; 
+            if(isManual) Swal.fire({title: 'Menyinkronkan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+            else updateSyncUI('loading');
+
+            fetch(schoolData.apiUrl + '?action=read&t=' + Date.now()).then(r => r.json()).then(data => {
+                let cloudDeleted = data.deletedLogIds || [];
+                deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
+
+                let logMap = new Map();
+                (data.logs || []).forEach(l => logMap.set(l.id, l));
+                logs.forEach(l => logMap.set(l.id, l));
+                logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
+
+                if(data.students && data.students.length > 0) {
+                    students = data.students.map(cloudS => {
+                        const localS = students.find(l => String(l.nis) === String(cloudS.nis));
+                        return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
+                    });
+                }
+                if(data.behaviors) behaviors = data.behaviors;
+                if(data.schoolData) {
+                    const localTime = schoolData.lastUpdate;
+                    schoolData = {...schoolData, ...data.schoolData};
+                    if (localTime > (data.schoolData.lastUpdate || 0)) schoolData.lastUpdate = localTime;
+                }
+
+                saveData(true); 
+                updateSyncUI('success');
+                if(isManual) Swal.fire({title:'Sinkronisasi Selesai', icon:'success', timer:1000, showConfirmButton:false}).then(refreshActiveUI); 
+                else refreshActiveUI();
+            }).catch(e => { 
+                if(isManual) Swal.fire('Gagal', 'Koneksi internet error.', 'error'); 
+                updateSyncUI('error'); 
+            });
+        }
+        // =========================================================================
 
         function refreshActiveUI() {
             if(currentScreen === 'teacher_dashboard') renderTeacherDashboard();
@@ -209,37 +269,6 @@
                 if(s) renderStudentDashboard(s);
             }
         }
-
-        function loadFromCloud(isManual = false, customCallback = null) {
-            if(!schoolData.apiUrl) return; updateSyncUI('loading');
-            fetch(schoolData.apiUrl + '?action=read&t=' + Date.now()).then(r => r.json()).then(data => {
-                if(isManual && !customCallback) Swal.close();
-                const cloudTime = data.schoolData?.lastUpdate || 0;
-                const localTime = schoolData.lastUpdate || 0;
-                if (cloudTime >= localTime || isManual || (students.length === 0 && data.students?.length > 0)) {
-                    if(data.students && Array.isArray(data.students)) {
-                        students = data.students.map(cloudS => {
-                            const localS = students.find(l => String(l.nis) === String(cloudS.nis));
-                            return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
-                        });
-                        if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
-                        if(data.behaviors) { behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)})); ensureSystemBehaviors(); }
-                        if(data.schoolData) schoolData = {...schoolData, ...data.schoolData};
-                        localStorage.setItem('schoolData', JSON.stringify(schoolData));
-                        localStorage.setItem('students', JSON.stringify(students));
-                        localStorage.setItem('logs', JSON.stringify(logs));
-                        localStorage.setItem('behaviors', JSON.stringify(behaviors));
-                        updateSyncUI('success');
-                        if (customCallback) customCallback(); else if (isManual) Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(refreshActiveUI); else refreshActiveUI();
-                    }
-                } else {
-                    updateSyncUI('success');
-                    syncToCloud();
-                    if (customCallback) customCallback(); else refreshActiveUI();
-                }
-            }).catch(e => { if(isManual || customCallback) Swal.fire('Gagal', 'Koneksi internet error.', 'error'); updateSyncUI('error'); });
-        }
-        function forcePull() { loadFromCloud(true); }
 
         function compressImage(file, isCover = false) { 
             return new Promise((resolve) => { 
@@ -297,16 +326,57 @@
 
         window.copyPersonalLink = function(nis) { if(!schoolData.apiUrl) return Swal.fire('Gagal', 'Link Script belum disetting', 'error'); const bu = window.location.href.split('?')[0], sn = students.find(s=>String(s.nis)===String(nis)).name, fl = `${bu}?api=${encodeURIComponent(schoolData.apiUrl)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&city=${encodeURIComponent(schoolData.city)}&mode=student_locked&nis=${encodeURIComponent(nis)}`; const el = document.createElement('textarea'); el.value = fl; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); Swal.fire({ title: 'Link Tersalin!', html: `Kirimkan link ini ke WhatsApp orang tua <b>${sn}</b>.`, icon: 'success' }); }
         window.setTab = function(type, nis = null) { if(currentScreen === 'teacher_detail' && nis) renderStudentDetail(nis, type); else { ['good', 'bad', 'salat', 'note'].forEach(t => { const el = document.getElementById('tab-' + t), btn = document.getElementById('btn-' + t); if(el) { el.classList.toggle('hidden', t !== type); btn.className = t === type ? `tab-btn tab-active-${t}` : "tab-btn tab-inactive"; } }); } }
-        function deleteLog(id, nis, tab) { Swal.fire({ title: 'Hapus?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((r) => { if (r.isConfirmed) { logs = logs.filter(l => String(l.id) !== String(id)); saveData(); renderStudentDetail(nis, tab); } }); }
-        function addPoint(nis, bid, ct) { if (isSpamDetected()) return; const b = behaviors.find(x => String(x.id) === String(bid)); if(b) { const sn = students.find(s=>String(s.nis)===String(nis)).name; logs.push({ id: Date.now(), studentId: nis, studentName: sn, behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() }); saveData(); Swal.fire({ title: 'Berhasil', text: `${b.label} (${b.points})`, icon: 'success', timer: 800, showConfirmButton: false }).then(() => renderStudentDetail(nis, ct)); } }
-        function addNoteOnly(nis) { if (isSpamDetected()) return; const txt = document.getElementById('noteInput').value; if(!txt) return; if(txt.length > 500) return Swal.fire('Error', 'Pesan maksimal 500 karakter.', 'error'); const sn = students.find(s=>String(s.nis)===String(nis)).name; logs.push({ id: Date.now(), studentId: nis, studentName: sn, behaviorLabel: "Catatan Guru", points: 0, type: 'neutral', note: txt, date: new Date().toISOString() }); saveData(); Swal.fire('Terkirim', '', 'success').then(()=> renderStudentDetail(nis, 'note')); }
+        
+        // PENGGUNAAN ATOMIC SYNC
+        function deleteLog(id, nis, tab) { 
+            Swal.fire({ title: 'Hapus?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((r) => { 
+                if (r.isConfirmed) { 
+                    performAtomicSync(() => { deletedLogIds.push(id); logs = logs.filter(l => String(l.id) !== String(id)); }, null, () => renderStudentDetail(nis, tab));
+                } 
+            }); 
+        }
+        
+        function addPoint(nis, bid, ct) { 
+            if (isSpamDetected()) return; 
+            const b = behaviors.find(x => String(x.id) === String(bid)); 
+            if(b) { 
+                performAtomicSync(() => {
+                    const sn = students.find(s=>String(s.nis)===String(nis)).name; 
+                    logs.push({ id: Date.now(), studentId: nis, studentName: sn, behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() }); 
+                }, `${b.label} (${b.points})`, () => renderStudentDetail(nis, ct));
+            } 
+        }
+        
+        function addNoteOnly(nis) { 
+            if (isSpamDetected()) return; 
+            const txt = document.getElementById('noteInput').value; if(!txt) return; 
+            if(txt.length > 500) return Swal.fire('Error', 'Pesan maksimal 500 karakter.', 'error'); 
+            
+            performAtomicSync(() => {
+                const sn = students.find(s=>String(s.nis)===String(nis)).name; 
+                logs.push({ id: Date.now(), studentId: nis, studentName: sn, behaviorLabel: "Catatan Guru", points: 0, type: 'neutral', note: txt, date: new Date().toISOString() }); 
+            }, 'Pesan Terkirim', () => renderStudentDetail(nis, 'note'));
+        }
 
         window.isLoggedToday = function(nis, label) { const today = new Date().toLocaleDateString('id-ID'); return logs.some(l => String(l.studentId) === String(nis) && l.behaviorLabel === label && new Date(l.date).toLocaleDateString('id-ID') === today); }
-        window.reportSalat = function(nis, bid) { if (isSpamDetected()) return; const b = behaviors.find(x => String(x.id) === String(bid)); if(!b) return; const isPos = b.type === 'plus'; Swal.fire({ title: isPos ? 'Lapor Salat?' : 'Lapor Tidak Salat?', text: isPos ? `Apakah kamu sudah melaksanakan ${b.label}?` : `Astagfirullah, benar kamu meninggalkan ${b.label.replace('Tidak ', '')}?`, icon: 'question', showCancelButton: true, confirmButtonColor: isPos ? '#14b8a6' : '#ef4444', confirmButtonText: isPos ? 'Ya, Sudah' : 'Ya, Tidak' }).then((result) => { if(result.isConfirmed) { const sn = students.find(s=>String(s.nis)===String(nis)).name; logs.push({ id: Date.now(), studentId: nis, studentName: sn, behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() }); saveData(); Swal.fire({ title: isPos ? 'Masyaallah!' : 'Peringatan', text: `Poin ${b.points > 0 ? '+'+b.points : b.points} ditambahkan.`, icon: isPos ? 'success' : 'warning', timer: 1500, showConfirmButton: false }).then(() => renderStudentDashboard(students.find(s=>String(s.nis)===String(nis)), 'salat')); } }); }
+        
+        window.reportSalat = function(nis, bid) { 
+            if (isSpamDetected()) return; 
+            const b = behaviors.find(x => String(x.id) === String(bid)); if(!b) return; 
+            const isPos = b.type === 'plus'; 
+            Swal.fire({ title: isPos ? 'Lapor Salat?' : 'Lapor Tidak Salat?', text: isPos ? `Apakah kamu sudah melaksanakan ${b.label}?` : `Astagfirullah, benar kamu meninggalkan ${b.label.replace('Tidak ', '')}?`, icon: 'question', showCancelButton: true, confirmButtonColor: isPos ? '#14b8a6' : '#ef4444', confirmButtonText: isPos ? 'Ya, Sudah' : 'Ya, Tidak' }).then((result) => { 
+                if(result.isConfirmed) { 
+                    performAtomicSync(() => {
+                        const sn = students.find(s=>String(s.nis)===String(nis)).name; 
+                        logs.push({ id: Date.now(), studentId: nis, studentName: sn, behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() }); 
+                    }, `Poin ${b.points > 0 ? '+'+b.points : b.points} ditambahkan.`, () => renderStudentDashboard(students.find(s=>String(s.nis)===String(nis)), 'salat'));
+                } 
+            }); 
+        }
 
         function renderStudentLogin() { currentScreen = 'student_login'; const html = `<div class="flex flex-col items-center justify-center min-h-[70vh] px-6 fade-in"><div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 text-3xl shadow-inner"><i class="fas fa-lock"></i></div><h2 class="text-2xl font-bold text-gray-800 mb-2">Login Murid</h2><input id="loginNis" placeholder="Masukkan NIS" class="w-full p-4 border rounded text-center text-xl mb-4 shadow"><button onclick="handleLoginManual()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white shadow-lg">MASUK & LAPOR SALAT</button></div>`; document.getElementById('appContent').innerHTML = html; }
         function handleLoginManual() { const nis = document.getElementById('loginNis').value.trim(); if(!nis) return Swal.fire('Tunggu', 'Masukkan NIS!', 'warning'); handleAutoLogin(nis); }
-        window.handleAutoLogin = function(nis) { const s = students.find(x => String(x.nis).trim() === String(nis).trim()); if(s) { renderStudentDashboard(s); if(schoolData.apiUrl) loadFromCloud(false); } else { if(schoolData.apiUrl) { currentViewedNis = nis; currentScreen = 'student_dashboard'; Swal.fire({ title: 'Menyiapkan Profil...', didOpen: () => { Swal.showLoading(); }}); loadFromCloud(false, () => { const f = students.find(x => String(x.nis).trim() === String(nis).trim()); if(f) { Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(() => renderStudentDashboard(f)); } else { Swal.fire('Gagal', 'NIS tidak ditemukan.', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); } }); } else { Swal.fire('Gagal', 'NIS tidak ditemukan.', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); } } }
+        window.handleAutoLogin = function(nis) { const s = students.find(x => String(x.nis).trim() === String(nis).trim()); if(s) { renderStudentDashboard(s); if(schoolData.apiUrl) loadFromCloud(false); } else { if(schoolData.apiUrl) { currentViewedNis = nis; currentScreen = 'student_dashboard'; Swal.fire({ title: 'Menyiapkan Profil...', didOpen: () => { Swal.showLoading(); }}); fetch(schoolData.apiUrl + '?action=read&t=' + Date.now()).then(r=>r.json()).then(data => { if(data.students) students = data.students; if(data.logs) logs = data.logs; if(data.behaviors) behaviors = data.behaviors; saveData(true); const f = students.find(x => String(x.nis).trim() === String(nis).trim()); if(f) { Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(() => renderStudentDashboard(f)); } else { Swal.fire('Gagal', 'NIS tidak ditemukan.', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); } }).catch(()=>{Swal.fire('Error','Koneksi Gagal','error')}); } else { Swal.fire('Gagal', 'NIS tidak ditemukan.', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); } } }
 
         function renderStudentDashboard(s, activeTab = 'good') {
             currentScreen = 'student_dashboard'; currentViewedNis = s.nis;
@@ -353,38 +423,21 @@
         function checkConnectionAndSave(url) { 
             if(!url) return Swal.fire('Error', 'URL Kosong', 'error'); 
             if(url.includes('/edit')) url = url.split('/edit')[0] + '/exec'; 
-            
             Swal.fire({ title: 'Menghubungkan & Memeriksa Awan...', didOpen: () => { Swal.showLoading(); } }); 
-            
-            fetch(url + '?action=read&t=' + Date.now())
-            .then(r => r.json())
-            .then(data => {
+            fetch(url + '?action=read&t=' + Date.now()).then(r => r.json()).then(data => {
                 schoolData.apiUrl = url;
-                
                 if(data.students && data.students.length > 0) {
-                    schoolData = {...schoolData, ...data.schoolData, apiUrl: url};
-                    students = data.students;
+                    schoolData = {...schoolData, ...data.schoolData, apiUrl: url}; students = data.students;
                     if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
                     if(data.behaviors) behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
-                    
-                    saveData(true); 
-                    
-                    Swal.fire('Berhasil Terhubung!', 'Data lama Anda berhasil ditarik kembali dari awan.', 'success').then(() => {
-                        document.querySelector('#apiUrlInput').value = url;
-                        location.reload(); 
-                    });
+                    saveData(true); Swal.fire('Berhasil Terhubung!', 'Data ditarik kembali dari awan.', 'success').then(() => { document.querySelector('#apiUrlInput').value = url; location.reload(); });
                 } else {
-                    saveData(); 
-                    Swal.fire('Tersimpan', 'Aplikasi terhubung ke database baru.', 'success');
-                    document.querySelector('#apiUrlInput').value = url;
+                    saveData(); Swal.fire('Tersimpan', 'Aplikasi terhubung ke database baru.', 'success'); document.querySelector('#apiUrlInput').value = url;
                 }
-            })
-            .catch(e => {
-                Swal.fire('Error', 'Gagal menghubungi Google Script. Pastikan link benar.', 'error');
-            });
+            }).catch(e => { Swal.fire('Error', 'Gagal menghubungi Google Script. Pastikan link benar.', 'error'); });
         }
 
-        function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; schoolData.city = document.getElementById('sCity').value; schoolData.teacherPassword = document.getElementById('tPass').value; saveData(); Swal.fire('Tersimpan', '', 'success'); }
+        function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; schoolData.city = document.getElementById('sCity').value; schoolData.teacherPassword = document.getElementById('tPass').value; saveData(true); Swal.fire('Tersimpan', '', 'success'); }
         function resetAll() { Swal.fire({ title: 'Reset Semua?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((r) => { if (r.isConfirmed) { localStorage.clear(); location.href = window.location.pathname; } }); }
 
         function renderAddStudent() { 
@@ -466,9 +519,9 @@
             ws['!cols'] = [{wch: 30}, {wch: 15}, {wch: 10}, {wch: 30}]; XLSX.utils.book_append_sheet(wb, ws, "Template"); XLSX.writeFile(wb, "Template_PoinkuPro.xlsx");
         }
 
-        function downloadBackup() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors})); a.download = "Backup_Poin.json"; a.click(); }
+        function downloadBackup() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors, deletedLogIds})); a.download = "Backup_Poin.json"; a.click(); }
         function triggerRestore() { document.getElementById('restoreInput').click(); }
-        function handleRestore(e) { const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); students = d.students; logs = d.logs; behaviors = d.behaviors; schoolData = d.schoolData; saveData(true); location.reload(); } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); } }; r.readAsText(e.target.files[0]); }
+        function handleRestore(e) { const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); students = d.students; logs = d.logs; behaviors = d.behaviors; schoolData = d.schoolData; deletedLogIds = d.deletedLogIds || []; saveData(true); location.reload(); } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); } }; r.readAsText(e.target.files[0]); }
 
         window.onload = function() { checkAutoConfig(); let ln = localStorage.getItem('lockedStudentNis'); if (ln) handleAutoLogin(ln); else { renderSplash(); if(schoolData.apiUrl) setTimeout(() => loadFromCloud(false), 500); } };
     </script>
