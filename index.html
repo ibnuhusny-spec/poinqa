@@ -49,15 +49,11 @@
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-      // URL dan Kunci ini HARUS SAMA dengan yang ada di Portal Terpadu
       const supabaseUrl = 'https://gquohpkbygzkuybgblmp.supabase.co';
       const supabaseKey = 'sb_publishable_xcOviXGQvu-Ua3U3sRY_wg_AHlCMYMt'; 
-      
       const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
       
-      // Deteksi apakah sedang dibuka di Pratinjau (Iframe)
       if (window.self === window.top) {
-        // Jika dibuka normal di browser, jalankan pengamanan
         _supabase.auth.getSession().then(({ data }) => {
           if (!data.session) {
             window.location.replace("https://portal-terpadu.vercel.app/");
@@ -118,7 +114,7 @@
             { id: 6, type: 'minus', label: 'Berkelahi / Gaduh', points: -15, icon: 'fa-user-injured' }
         ];
 
-        let schoolData, students, logs, behaviors, deletedLogIds;
+        let schoolData, students, logs, behaviors, deletedLogIds, deletedStudentNis;
         let currentScreen = 'splash', currentViewedNis = null, tempAddPhoto = "", isStudentModeOnly = false;
         let lastActionTime = 0, spamCounter = 0, debounceTimer, isSyncing = false, pendingSync = false;
 
@@ -146,8 +142,9 @@
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
             deletedLogIds = JSON.parse(localStorage.getItem('deletedLogIds')) || [];
+            deletedStudentNis = JSON.parse(localStorage.getItem('deletedStudentNis')) || [];
             ensureSystemBehaviors();
-        } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; deletedLogIds = []; }
+        } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; deletedLogIds = []; deletedStudentNis = []; }
 
         function saveData(skipCloud = false) {
             schoolData.lastUpdate = Date.now();
@@ -156,6 +153,7 @@
             localStorage.setItem('logs', JSON.stringify(logs));
             localStorage.setItem('behaviors', JSON.stringify(behaviors));
             localStorage.setItem('deletedLogIds', JSON.stringify(deletedLogIds));
+            localStorage.setItem('deletedStudentNis', JSON.stringify(deletedStudentNis));
             if (!skipCloud && schoolData.sheetId && MASTER_API_URL.startsWith("http")) syncToCloud();
         }
 
@@ -194,13 +192,13 @@
         window.addEventListener('beforeunload', function (e) { if (isSyncing || pendingSync) { e.preventDefault(); e.returnValue = ''; } });
 
         // =========================================================================
-        // PENGIRIMAN KE MASTER API URL
+        // PENGIRIMAN KE MASTER API URL (DILENGKAPI DAFTAR HITAM SISWA)
         // =========================================================================
         function syncToCloud() {
             if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) return; 
             clearTimeout(debounceTimer); pendingSync = true; updateSyncUI('loading');
             const lightStudents = students.map(s => { const { photo, studentPhoto, teacherCoverPhoto, studentCoverPhoto, ...sisa } = s; return sisa; });
-            const payload = { sheetId: schoolData.sheetId, schoolData, students: lightStudents, logs, behaviors, deletedLogIds };
+            const payload = { sheetId: schoolData.sheetId, schoolData, students: lightStudents, logs, behaviors, deletedLogIds, deletedStudentNis };
             
             debounceTimer = setTimeout(() => {
                 fetch(MASTER_API_URL, {
@@ -223,8 +221,12 @@
             
             fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
                 if(data.error) throw new Error(data.error);
+                
+                // Sinkronisasi Daftar Hitam
                 let cloudDeleted = data.deletedLogIds || [];
                 deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
+                let cloudDeletedStudents = data.deletedStudentNis || [];
+                deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
 
                 let logMap = new Map();
                 (data.logs || []).forEach(l => logMap.set(l.id, l));
@@ -232,7 +234,9 @@
                 logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
 
                 if(data.students && data.students.length > 0) {
-                    students = data.students.map(cloudS => {
+                    // Buang siswa yang ada di daftar hitam dari kiriman awan
+                    let validCloudStudents = data.students.filter(s => !deletedStudentNis.includes(String(s.nis)));
+                    students = validCloudStudents.map(cloudS => {
                         const localS = students.find(l => String(l.nis) === String(cloudS.nis));
                         return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
                     });
@@ -258,8 +262,12 @@
 
             fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
                 if(data.error) throw new Error(data.error);
+                
+                // Sinkronisasi Daftar Hitam
                 let cloudDeleted = data.deletedLogIds || [];
                 deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
+                let cloudDeletedStudents = data.deletedStudentNis || [];
+                deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
 
                 let logMap = new Map();
                 (data.logs || []).forEach(l => logMap.set(l.id, l));
@@ -267,7 +275,8 @@
                 logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
 
                 if(data.students && data.students.length > 0) {
-                    students = data.students.map(cloudS => {
+                    let validCloudStudents = data.students.filter(s => !deletedStudentNis.includes(String(s.nis)));
+                    students = validCloudStudents.map(cloudS => {
                         const localS = students.find(l => String(l.nis) === String(cloudS.nis));
                         return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
                     });
@@ -337,7 +346,6 @@
             let listHTML = students.length === 0 ? `<div class="text-center py-10 text-gray-400"><i class="fas fa-users-slash text-4xl mb-2"></i><br>Belum ada data siswa.</div>` : '';
             students.forEach(s => { const tp = logs.filter(l => String(l.studentId) === String(s.nis)).reduce((sum, c) => sum + Number(c.points), 0); const dp = s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'; listHTML += `<div onclick="renderStudentDetail('${s.nis}')" class="bg-white p-4 rounded-xl shadow border-l-4 ${tp>=0?'border-green-400':'border-red-400'} mb-3 flex justify-between cursor-pointer"><div class="flex items-center gap-3"><div class="w-12 h-12 rounded-full bg-gray-200 overflow-hidden"><img src="${dp}" class="w-full h-full object-cover"></div><div><h3 class="font-bold text-gray-800">${s.name}</h3><p class="text-xs text-gray-500">${s.kelas} | ${s.nis}</p></div></div><div class="font-bold text-xl flex items-center ${tp>=0?'text-green-600':'text-red-500'}">${tp>0?'+':''}${tp}</div></div>`; });
             
-            // Tambahkan tombol Hapus Semua jika ada data siswa
             let deleteAllBtn = students.length > 0 ? `<button onclick="deleteAllStudents()" class="w-full mt-4 py-2 text-red-500 border border-red-500 rounded-lg text-sm font-bold"><i class="fas fa-trash-alt mr-1"></i> Hapus Semua Data Siswa</button>` : '';
 
             const html = `<div class="px-4 pb-20 fade-in"><h2 class="text-2xl font-bold mb-4">Dashboard Guru</h2><div class="grid grid-cols-2 gap-3 mb-3"><button onclick="renderAddStudent()" class="btn-3d btn-blue py-3 rounded-lg text-sm font-bold"><i class="fas fa-user-plus mr-1"></i> Tambah Siswa</button><button onclick="renderManageBehaviors()" class="btn-3d btn-purple py-3 rounded-lg text-sm font-bold"><i class="fas fa-list-check mr-1"></i> Atur Poin</button></div><div class="grid grid-cols-2 gap-3 mb-6"><button onclick="exportToExcel()" class="btn-3d btn-green py-3 rounded-lg text-sm font-bold"><i class="fas fa-file-excel mr-1"></i> Excel</button><button onclick="renderSetup()" class="btn-3d btn-gray py-3 rounded-lg text-sm font-bold"><i class="fas fa-cog mr-1"></i> Setting</button></div><div class="relative mb-4"><input type="text" id="searchStudent" onkeyup="filterStudents()" placeholder="Cari nama siswa..." class="w-full p-3 pl-10 rounded-lg border focus:ring-2 focus:ring-blue-400"><i class="fas fa-search absolute left-3 top-3.5 text-gray-400"></i></div><div id="studentListContainer">${listHTML}</div>${deleteAllBtn}</div>`;
@@ -421,7 +429,15 @@
                     Swal.fire({ title: 'Menyiapkan Profil...', didOpen: () => { Swal.showLoading(); }}); 
                     fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r=>r.json()).then(data => { 
                         if(data.error) throw new Error(data.error);
-                        if(data.students) students = data.students; if(data.logs) logs = data.logs; if(data.behaviors) behaviors = data.behaviors; 
+                        
+                        let cloudDeletedStudents = data.deletedStudentNis || [];
+                        deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
+
+                        if(data.students) {
+                            students = data.students.filter(st => !deletedStudentNis.includes(String(st.nis)));
+                        }
+                        if(data.logs) logs = data.logs; 
+                        if(data.behaviors) behaviors = data.behaviors; 
                         saveData(true); 
                         const f = students.find(x => String(x.nis).trim() === String(nis).trim()); 
                         if(f) { Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(() => renderStudentDashboard(f)); } 
@@ -465,9 +481,6 @@
         window.handleStudentTab = function(type, nis, ld) { setTab(type); if(type === 'note' && ld) { localStorage.setItem(`lastReadNote_${nis}`, ld); const b = document.getElementById('noteBadge'); if(b) b.style.display = 'none'; } }
         window.updateImage = function(nis, type) { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = async (e) => { const f = e.target.files[0]; if(f) { Swal.fire({title: 'Memproses...', didOpen: () => Swal.showLoading()}); const ic = type.includes('Cover'); const b64 = await compressImage(f, ic); const idx = students.findIndex(s => String(s.nis) === String(nis)); if(idx !== -1) { if(type === 'teacherCover') students[idx].teacherCoverPhoto = b64; else if(type === 'teacherProfile') students[idx].photo = b64; else if(type === 'studentCover') students[idx].studentCoverPhoto = b64; else if(type === 'studentProfile') students[idx].studentPhoto = b64; saveData(); Swal.close(); if(type.includes('teacher')) renderStudentDetail(nis); else renderStudentDashboard(students[idx]); } } }; input.click(); }
 
-        // =========================================================================
-        // PERUBAHAN TAMPILAN SETUP (MEMINTA ID SHEET BUKAN LINK SCRIPT)
-        // =========================================================================
         function renderSetup() { 
             currentScreen = 'setup'; 
             const html = `<div class="pt-10 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold mb-4">Pengaturan</h2>
@@ -531,6 +544,7 @@
 
         window.previewAddPhoto = async function(e) { const f = e.target.files[0]; if(f) { Swal.fire({title: 'Memproses...', didOpen: () => Swal.showLoading()}); tempAddPhoto = await compressImage(f, false); document.getElementById('addPhotoPreview').src = tempAddPhoto; document.getElementById('addPhotoPreview').classList.remove('hidden'); document.getElementById('addPhotoPlaceholder').classList.add('hidden'); Swal.close(); } }
         function handleAddSubmit(e) { e.preventDefault(); const f = e.target, nis = String(f.nis.value).trim(); if(students.find(s => String(s.nis).trim() === nis)) return Swal.fire('Gagal', 'NIS sudah ada', 'error'); students.push({ name: f.name.value, nis: nis, kelas: f.kelas.value, dob: f.dob.value, photo: tempAddPhoto, studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); }
+        
         function renderEditStudent(nis) { 
             currentScreen = 'edit_student'; const s = students.find(x => String(x.nis) === String(nis)); if (!s) return; 
             const html = `<div class="pt-6 px-6 fade-in"><h2 class="text-xl font-bold mb-4">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><input name="name" value="${s.name}" required class="w-full p-3 rounded border"><input value="${s.nis}" disabled class="w-full p-3 rounded bg-gray-100 border text-gray-400"><input name="kelas" value="${s.kelas}" class="w-full p-3 rounded border"><input type="date" name="dob" value="${s.dob}" class="w-full p-3 rounded border"><button class="btn-3d btn-yellow w-full py-3 rounded font-bold">Update</button></form><button onclick="deleteStudent('${nis}')" class="w-full mt-4 py-3 text-red-500 font-bold border border-red-200 rounded">Hapus Siswa</button><button onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 text-gray-500">Batal</button></div>`; 
@@ -558,9 +572,15 @@
             }).then(r => { 
                 if(r.isConfirmed) { 
                     performAtomicSync(() => { 
+                        deletedStudentNis.push(String(nis)); // MASUKKAN KE DAFTAR HITAM
                         students = students.filter(s => String(s.nis) !== String(nis)); 
+                        
+                        let logsToDel = logs.filter(l => String(l.studentId) === String(nis));
+                        logsToDel.forEach(l => deletedLogIds.push(l.id));
                         logs = logs.filter(l => String(l.studentId) !== String(nis)); 
-                    }, 'Siswa berhasil dihapus', () => renderTeacherDashboard()); 
+                    }, 'Siswa berhasil dihapus', () => {
+                        if (currentScreen === 'edit_student' || currentScreen === 'teacher_detail') renderTeacherDashboard();
+                    }); 
                 } 
             }); 
         }
@@ -576,6 +596,8 @@
             }).then(r => { 
                 if(r.isConfirmed) { 
                     performAtomicSync(() => { 
+                        students.forEach(s => deletedStudentNis.push(String(s.nis))); // SEMUA MASUK DAFTAR HITAM
+                        logs.forEach(l => deletedLogIds.push(l.id));
                         students = []; 
                         logs = []; 
                     }, 'Semua data siswa berhasil dihapus', () => renderTeacherDashboard()); 
@@ -646,9 +668,9 @@
             ws['!cols'] = [{wch: 30}, {wch: 15}, {wch: 10}, {wch: 30}]; XLSX.utils.book_append_sheet(wb, ws, "Template"); XLSX.writeFile(wb, "Template_PoinkuPro.xlsx");
         }
 
-        function downloadBackup() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors, deletedLogIds})); a.download = "Backup_Poin.json"; a.click(); }
+        function downloadBackup() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors, deletedLogIds, deletedStudentNis})); a.download = "Backup_Poin.json"; a.click(); }
         function triggerRestore() { document.getElementById('restoreInput').click(); }
-        function handleRestore(e) { const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); students = d.students; logs = d.logs; behaviors = d.behaviors; schoolData = d.schoolData; deletedLogIds = d.deletedLogIds || []; saveData(true); location.reload(); } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); } }; r.readAsText(e.target.files[0]); }
+        function handleRestore(e) { const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); students = d.students; logs = d.logs; behaviors = d.behaviors; schoolData = d.schoolData; deletedLogIds = d.deletedLogIds || []; deletedStudentNis = d.deletedStudentNis || []; saveData(true); location.reload(); } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); } }; r.readAsText(e.target.files[0]); }
 
         window.onload = function() { checkAutoConfig(); let ln = localStorage.getItem('lockedStudentNis'); if (ln) handleAutoLogin(ln); else { renderSplash(); if(schoolData.sheetId && MASTER_API_URL.startsWith("http")) setTimeout(() => loadFromCloud(false), 500); } };
     </script>
