@@ -572,12 +572,21 @@
             }).then(r => { 
                 if(r.isConfirmed) { 
                     performAtomicSync(() => { 
-                        deletedStudentNis.push(String(nis)); // MASUKKAN KE DAFTAR HITAM
+                        // Tambahkan NIS ke daftar hitam SEBELUM menyimpan
+                        if(!deletedStudentNis.includes(String(nis))) {
+                             deletedStudentNis.push(String(nis)); 
+                        }
+                        
                         students = students.filter(s => String(s.nis) !== String(nis)); 
                         
                         let logsToDel = logs.filter(l => String(l.studentId) === String(nis));
-                        logsToDel.forEach(l => deletedLogIds.push(l.id));
+                        logsToDel.forEach(l => {
+                            if(!deletedLogIds.includes(l.id)) deletedLogIds.push(l.id);
+                        });
                         logs = logs.filter(l => String(l.studentId) !== String(nis)); 
+                        
+                        // Penting: Simpan daftar hitam yang baru ke LocalStorage secara eksplisit
+                        localStorage.setItem('deletedStudentNis', JSON.stringify(deletedStudentNis));
                     }, 'Siswa berhasil dihapus', () => {
                         if (currentScreen === 'edit_student' || currentScreen === 'teacher_detail') renderTeacherDashboard();
                     }); 
@@ -596,10 +605,18 @@
             }).then(r => { 
                 if(r.isConfirmed) { 
                     performAtomicSync(() => { 
-                        students.forEach(s => deletedStudentNis.push(String(s.nis))); // SEMUA MASUK DAFTAR HITAM
-                        logs.forEach(l => deletedLogIds.push(l.id));
+                        students.forEach(s => {
+                            if(!deletedStudentNis.includes(String(s.nis))) deletedStudentNis.push(String(s.nis));
+                        });
+                        logs.forEach(l => {
+                             if(!deletedLogIds.includes(l.id)) deletedLogIds.push(l.id);
+                        });
+                        
                         students = []; 
                         logs = []; 
+                        
+                        // Penting: Simpan daftar hitam yang baru ke LocalStorage
+                        localStorage.setItem('deletedStudentNis', JSON.stringify(deletedStudentNis));
                     }, 'Semua data siswa berhasil dihapus', () => renderTeacherDashboard()); 
                 } 
             });
