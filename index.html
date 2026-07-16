@@ -336,7 +336,11 @@
             currentScreen = 'teacher_dashboard'; currentViewedNis = null;
             let listHTML = students.length === 0 ? `<div class="text-center py-10 text-gray-400"><i class="fas fa-users-slash text-4xl mb-2"></i><br>Belum ada data siswa.</div>` : '';
             students.forEach(s => { const tp = logs.filter(l => String(l.studentId) === String(s.nis)).reduce((sum, c) => sum + Number(c.points), 0); const dp = s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'; listHTML += `<div onclick="renderStudentDetail('${s.nis}')" class="bg-white p-4 rounded-xl shadow border-l-4 ${tp>=0?'border-green-400':'border-red-400'} mb-3 flex justify-between cursor-pointer"><div class="flex items-center gap-3"><div class="w-12 h-12 rounded-full bg-gray-200 overflow-hidden"><img src="${dp}" class="w-full h-full object-cover"></div><div><h3 class="font-bold text-gray-800">${s.name}</h3><p class="text-xs text-gray-500">${s.kelas} | ${s.nis}</p></div></div><div class="font-bold text-xl flex items-center ${tp>=0?'text-green-600':'text-red-500'}">${tp>0?'+':''}${tp}</div></div>`; });
-            const html = `<div class="px-4 pb-20 fade-in"><h2 class="text-2xl font-bold mb-4">Dashboard Guru</h2><div class="grid grid-cols-2 gap-3 mb-3"><button onclick="renderAddStudent()" class="btn-3d btn-blue py-3 rounded-lg text-sm font-bold"><i class="fas fa-user-plus mr-1"></i> Tambah Siswa</button><button onclick="renderManageBehaviors()" class="btn-3d btn-purple py-3 rounded-lg text-sm font-bold"><i class="fas fa-list-check mr-1"></i> Atur Poin</button></div><div class="grid grid-cols-2 gap-3 mb-6"><button onclick="exportToExcel()" class="btn-3d btn-green py-3 rounded-lg text-sm font-bold"><i class="fas fa-file-excel mr-1"></i> Excel</button><button onclick="renderSetup()" class="btn-3d btn-gray py-3 rounded-lg text-sm font-bold"><i class="fas fa-cog mr-1"></i> Setting</button></div><div class="relative mb-4"><input type="text" id="searchStudent" onkeyup="filterStudents()" placeholder="Cari nama siswa..." class="w-full p-3 pl-10 rounded-lg border focus:ring-2 focus:ring-blue-400"><i class="fas fa-search absolute left-3 top-3.5 text-gray-400"></i></div><div id="studentListContainer">${listHTML}</div></div>`;
+            
+            // Tambahkan tombol Hapus Semua jika ada data siswa
+            let deleteAllBtn = students.length > 0 ? `<button onclick="deleteAllStudents()" class="w-full mt-4 py-2 text-red-500 border border-red-500 rounded-lg text-sm font-bold"><i class="fas fa-trash-alt mr-1"></i> Hapus Semua Data Siswa</button>` : '';
+
+            const html = `<div class="px-4 pb-20 fade-in"><h2 class="text-2xl font-bold mb-4">Dashboard Guru</h2><div class="grid grid-cols-2 gap-3 mb-3"><button onclick="renderAddStudent()" class="btn-3d btn-blue py-3 rounded-lg text-sm font-bold"><i class="fas fa-user-plus mr-1"></i> Tambah Siswa</button><button onclick="renderManageBehaviors()" class="btn-3d btn-purple py-3 rounded-lg text-sm font-bold"><i class="fas fa-list-check mr-1"></i> Atur Poin</button></div><div class="grid grid-cols-2 gap-3 mb-6"><button onclick="exportToExcel()" class="btn-3d btn-green py-3 rounded-lg text-sm font-bold"><i class="fas fa-file-excel mr-1"></i> Excel</button><button onclick="renderSetup()" class="btn-3d btn-gray py-3 rounded-lg text-sm font-bold"><i class="fas fa-cog mr-1"></i> Setting</button></div><div class="relative mb-4"><input type="text" id="searchStudent" onkeyup="filterStudents()" placeholder="Cari nama siswa..." class="w-full p-3 pl-10 rounded-lg border focus:ring-2 focus:ring-blue-400"><i class="fas fa-search absolute left-3 top-3.5 text-gray-400"></i></div><div id="studentListContainer">${listHTML}</div>${deleteAllBtn}</div>`;
             document.getElementById('appContent').innerHTML = html;
         }
 
@@ -532,8 +536,52 @@
             const html = `<div class="pt-6 px-6 fade-in"><h2 class="text-xl font-bold mb-4">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><input name="name" value="${s.name}" required class="w-full p-3 rounded border"><input value="${s.nis}" disabled class="w-full p-3 rounded bg-gray-100 border text-gray-400"><input name="kelas" value="${s.kelas}" class="w-full p-3 rounded border"><input type="date" name="dob" value="${s.dob}" class="w-full p-3 rounded border"><button class="btn-3d btn-yellow w-full py-3 rounded font-bold">Update</button></form><button onclick="deleteStudent('${nis}')" class="w-full mt-4 py-3 text-red-500 font-bold border border-red-200 rounded">Hapus Siswa</button><button onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 text-gray-500">Batal</button></div>`; 
             document.getElementById('appContent').innerHTML = html; 
         }
-        function handleUpdateStudent(e, oldNis) { e.preventDefault(); const f = e.target, idx = students.findIndex(s => String(s.nis) === String(oldNis)); if (idx !== -1) { students[idx] = { ...students[idx], name: f.name.value, kelas: f.kelas.value, dob: f.dob.value }; saveData(); Swal.fire('Sukses', '', 'success').then(() => renderStudentDetail(oldNis)); } }
-        function deleteStudent(nis) { Swal.fire({ title: 'Hapus?', icon: 'warning', showCancelButton: true }).then(r => { if(r.isConfirmed) { students = students.filter(s => String(s.nis) !== String(nis)); logs = logs.filter(l => String(l.studentId) !== String(nis)); saveData(); renderTeacherDashboard(); } }); }
+
+        function handleUpdateStudent(e, oldNis) { 
+            e.preventDefault(); 
+            const f = e.target;
+            performAtomicSync(() => {
+                const idx = students.findIndex(s => String(s.nis) === String(oldNis)); 
+                if (idx !== -1) { 
+                    students[idx] = { ...students[idx], name: f.name.value, kelas: f.kelas.value, dob: f.dob.value }; 
+                }
+            }, 'Data berhasil diperbarui', () => renderStudentDetail(oldNis));
+        }
+
+        function deleteStudent(nis) { 
+            Swal.fire({ 
+                title: 'Hapus Siswa?', 
+                text: "Semua riwayat poin siswa ini juga akan terhapus.", 
+                icon: 'warning', 
+                showCancelButton: true, 
+                confirmButtonColor: '#d33' 
+            }).then(r => { 
+                if(r.isConfirmed) { 
+                    performAtomicSync(() => { 
+                        students = students.filter(s => String(s.nis) !== String(nis)); 
+                        logs = logs.filter(l => String(l.studentId) !== String(nis)); 
+                    }, 'Siswa berhasil dihapus', () => renderTeacherDashboard()); 
+                } 
+            }); 
+        }
+
+        function deleteAllStudents() {
+            Swal.fire({ 
+                title: 'Hapus SEMUA Siswa?', 
+                text: "Data ini tidak bisa dikembalikan!", 
+                icon: 'error', 
+                showCancelButton: true, 
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Ya, Hapus Semua'
+            }).then(r => { 
+                if(r.isConfirmed) { 
+                    performAtomicSync(() => { 
+                        students = []; 
+                        logs = []; 
+                    }, 'Semua data siswa berhasil dihapus', () => renderTeacherDashboard()); 
+                } 
+            });
+        }
 
         function renderManageBehaviors() { 
             currentScreen = 'manage_behaviors'; 
