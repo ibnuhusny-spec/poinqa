@@ -46,27 +46,7 @@
         .fade-in { animation: fadeIn 0.4s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script>
-      const supabaseUrl = 'https://gquohpkbygzkuybgblmp.supabase.co';
-      const supabaseKey = 'sb_publishable_xcOviXGQvu-Ua3U3sRY_wg_AHlCMYMt'; 
-      const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
-      
-      // CEK APAKAH INI LINK MURID/ORANG TUA (Bypass Sistem Keamanan Portal)
-      const urlParams = new URLSearchParams(window.location.search);
-      const isStudentLink = urlParams.get('mode') === 'student' || urlParams.get('mode') === 'student_locked' || localStorage.getItem('lockedStudentNis');
-
-      if (window.self === window.top && !isStudentLink) {
-        _supabase.auth.getSession().then(({ data }) => {
-          if (!data.session) {
-            window.location.replace("https://portal-terpadu.vercel.app/");
-          }
-        });
-      } else {
-        console.log("Mode Murid / Pratinjau: Redirect portal dinonaktifkan agar bisa diakses Orang Tua.");
-      }
-    </script>
+    <!-- Supabase telah dihapus di versi ini agar berjalan 100% independen -->
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800">
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
@@ -215,7 +195,6 @@
             fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
                 if(data.error) throw new Error(data.error);
                 
-                // ANTI-DOWNGRADE: Jika data di HP lebih baru, paksa push ke atas
                 const localTime = schoolData.lastUpdate || 0;
                 const cloudTime = (data.schoolData && data.schoolData.lastUpdate) ? data.schoolData.lastUpdate : 0;
                 
@@ -225,7 +204,6 @@
                     return;
                 }
 
-                // Sinkronisasi Daftar Hitam
                 let cloudDeleted = data.deletedLogIds || [];
                 deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
                 let cloudDeletedStudents = data.deletedStudentNis || [];
@@ -400,7 +378,7 @@
 
         window.isLoggedToday = function(nis, label) { const today = new Date().toLocaleDateString('id-ID'); return logs.some(l => String(l.studentId) === String(nis) && l.behaviorLabel === label && new Date(l.date).toLocaleDateString('id-ID') === today); }
         
-        window.reportSalat = function(nis, bid) { 
+        function reportSalat(nis, bid) { 
             if (isSpamDetected()) return; 
             const b = behaviors.find(x => String(x.id) === String(bid)); if(!b) return; 
             const isPos = b.type === 'plus'; 
@@ -415,10 +393,12 @@
         }
 
         function renderStudentLogin() { currentScreen = 'student_login'; const html = `<div class="flex flex-col items-center justify-center min-h-[70vh] px-6 fade-in"><div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 text-3xl shadow-inner"><i class="fas fa-lock"></i></div><h2 class="text-2xl font-bold text-gray-800 mb-2">Login Murid</h2><input id="loginNis" placeholder="Masukkan NIS" class="w-full p-4 border rounded text-center text-xl mb-4 shadow"><button onclick="handleLoginManual()" class="btn-3d btn-orange w-full py-3 rounded-lg font-bold text-white shadow-lg">MASUK & LAPOR SALAT</button></div>`; document.getElementById('appContent').innerHTML = html; }
+        
         function handleLoginManual() { const nis = document.getElementById('loginNis').value.trim(); if(!nis) return Swal.fire('Tunggu', 'Masukkan NIS!', 'warning'); handleAutoLogin(nis); }
         
         window.handleAutoLogin = function(nis) { 
-            const s = students.find(x => String(x.nis).trim() === String(nis).trim()); 
+            const cleanNis = String(nis).trim().toLowerCase();
+            const s = students.find(x => String(x.nis).trim().toLowerCase() === cleanNis); 
             if(s) { 
                 renderStudentDashboard(s); 
                 if(schoolData.sheetId) loadFromCloud(false); 
@@ -434,10 +414,10 @@
                         if(data.logs) logs = data.logs; 
                         if(data.behaviors) behaviors = data.behaviors; 
                         saveData(true); 
-                        const f = students.find(x => String(x.nis).trim() === String(nis).trim()); 
+                        const f = students.find(x => String(x.nis).trim().toLowerCase() === cleanNis); 
                         if(f) { Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(() => renderStudentDashboard(f)); } 
-                        else { Swal.fire('Gagal', 'NIS tidak ditemukan.', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); } 
-                    }).catch(err => { Swal.fire('Error', err.message || 'Koneksi Gagal', 'error'); }); 
+                        else { Swal.fire('Gagal', 'NIS tidak ditemukan di Database. Mungkin guru belum selesai sinkronisasi. Silakan coba lagi nanti.', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); } 
+                    }).catch(err => { Swal.fire('Error', err.message || 'Koneksi Gagal', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); }); 
                 } else { 
                     Swal.fire('Gagal', 'NIS tidak ditemukan atau ID Database belum diatur.', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); 
                 } 
@@ -528,13 +508,14 @@
         
         function handleAddSubmit(e) { 
             e.preventDefault(); const f = e.target, nis = String(f.nis.value).trim(); 
-            if(students.find(s => String(s.nis).trim() === nis)) return Swal.fire('Gagal', 'NIS sudah ada', 'error'); 
+            const cleanNis = nis.toLowerCase();
+            if(students.find(s => String(s.nis).trim().toLowerCase() === cleanNis)) return Swal.fire('Gagal', 'NIS sudah ada', 'error'); 
             
             // ANTI-GHOST: Hapus NIS ini dari daftar hitam memori HP saat guru sengaja mendaftarkannya kembali
-            deletedStudentNis = deletedStudentNis.filter(n => String(n) !== nis);
+            deletedStudentNis = deletedStudentNis.filter(n => String(n).trim().toLowerCase() !== cleanNis);
             
-            students.push({ name: f.name.value, nis: nis, kelas: f.kelas.value, dob: f.dob.value, photo: tempAddPhoto, studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
-            saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); 
+            students.push({ name: String(f.name.value).trim(), nis: nis, kelas: String(f.kelas.value).trim(), dob: f.dob.value, photo: tempAddPhoto, studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
+            saveData(); Swal.fire('Sukses', 'Data disimpan. Tunggu status menjadi Online sebelum membagikan link.', 'success').then(() => renderTeacherDashboard()); 
         }
         
         function renderEditStudent(nis) { 
@@ -629,15 +610,16 @@
                         const nis = String(row[1]).trim(); let dob = "";
                         if(row[3]) { if(!isNaN(row[3]) && typeof row[3] === 'number') { let d = new Date((row[3] - 25569) * 86400000); dob = d.toISOString().split('T')[0]; } else { dob = String(row[3]).trim(); } }
                         
+                        const cleanNis = nis.toLowerCase();
                         // ANTI-GHOST EXCEL: Hapus dari daftar hitam lokal saat di-import
-                        deletedStudentNis = deletedStudentNis.filter(n => String(n) !== nis);
+                        deletedStudentNis = deletedStudentNis.filter(n => String(n).trim().toLowerCase() !== cleanNis);
                         
-                        if(!students.find(s => String(s.nis) === nis)) {
-                            students.push({ name: row[0], nis: nis, kelas: row[2] || "-", dob: dob, photo: "", studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
+                        if(!students.find(s => String(s.nis).trim().toLowerCase() === cleanNis)) {
+                            students.push({ name: String(row[0]).trim(), nis: nis, kelas: row[2] ? String(row[2]).trim() : "-", dob: dob, photo: "", studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
                         }
                     }
                 }
-                saveData(); Swal.fire('Sukses', 'Data diimpor.', 'success').then(() => renderTeacherDashboard());
+                saveData(); Swal.fire('Sukses', 'Data berhasil diimpor! Pastikan menunggu status di bawah menjadi "Online" sebelum membagikan link ke murid/orang tua.', 'success').then(() => renderTeacherDashboard());
             }; r.readAsArrayBuffer(f); document.getElementById('excelInput').value = "";
         }
         
