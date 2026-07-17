@@ -857,7 +857,22 @@
             }).catch(e => { Swal.fire('Error', 'Gagal menghubungi Server Master. Cek koneksi Anda.', 'error'); });
         }
 
-        function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; schoolData.city = document.getElementById('sCity').value; schoolData.teacherPassword = document.getElementById('tPass').value; saveData(true); Swal.fire('Tersimpan', '', 'success'); }
+        function saveSettings() { 
+    const newPass = document.getElementById('tPass').value.trim();
+    
+    // Cegah user mengosongkan password
+    if (!newPass) {
+        return Swal.fire('Gagal', 'Password Guru tidak boleh kosong!', 'warning');
+    }
+
+    schoolData.name = document.getElementById('sName').value; 
+    schoolData.location = document.getElementById('sLoc').value; 
+    schoolData.city = document.getElementById('sCity').value; 
+    schoolData.teacherPassword = newPass; 
+    
+    saveData(true); 
+    Swal.fire('Tersimpan', 'Profil dan Password berhasil diupdate.', 'success'); 
+}
         function resetAll() { Swal.fire({ title: 'Reset Semua?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((r) => { if (r.isConfirmed) { localStorage.clear(); location.href = window.location.pathname; } }); }
 
         function renderAddStudent() { 
