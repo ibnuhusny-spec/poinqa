@@ -194,22 +194,42 @@
         // =========================================================================
         // PENGIRIMAN KE MASTER API URL (DILENGKAPI DAFTAR HITAM SISWA)
         // =========================================================================
-        function syncToCloud() {
-            if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) return; 
-            clearTimeout(debounceTimer); pendingSync = true; updateSyncUI('loading');
-            const lightStudents = students.map(s => { const { photo, studentPhoto, teacherCoverPhoto, studentCoverPhoto, ...sisa } = s; return sisa; });
-            const payload = { sheetId: schoolData.sheetId, schoolData, students: lightStudents, logs, behaviors, deletedLogIds, deletedStudentNis };
-            
-            debounceTimer = setTimeout(() => {
-                fetch(MASTER_API_URL, {
-                    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ data: JSON.stringify(payload) }), mode: 'no-cors', keepalive: true 
-                }).then(() => updateSyncUI('success')).catch(() => {
-                    const form = document.getElementById('syncForm'), input = document.getElementById('syncDataInput');
-                    if(form && input) { form.action = MASTER_API_URL; input.value = JSON.stringify(payload); form.submit(); setTimeout(() => updateSyncUI('success'), 1000); }
-                });
-            }, 300);
-        }
+        // Ganti fungsi syncToCloud Anda dengan ini:
+function syncToCloud() {
+    if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) return; 
+    clearTimeout(debounceTimer); 
+    pendingSync = true; 
+    updateSyncUI('loading');
+
+    // MENGIRIM SELURUH DATA SISWA YANG ADA DI HP SAAT INI
+    const payload = { 
+        sheetId: schoolData.sheetId, 
+        schoolData: schoolData, 
+        students: students, // Mengirim SEMUA siswa, bukan per orang
+        logs: logs, 
+        behaviors: behaviors, 
+        deletedLogIds: deletedLogIds, 
+        deletedStudentNis: deletedStudentNis 
+    };
+    
+    debounceTimer = setTimeout(() => {
+        fetch(MASTER_API_URL, {
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ data: JSON.stringify(payload) }), 
+            mode: 'no-cors', 
+            keepalive: true 
+        }).then(() => updateSyncUI('success')).catch(() => {
+            const form = document.getElementById('syncForm'), input = document.getElementById('syncDataInput');
+            if(form && input) { 
+                form.action = MASTER_API_URL; 
+                input.value = JSON.stringify(payload); 
+                form.submit(); 
+                setTimeout(() => updateSyncUI('success'), 1000); 
+            }
+        });
+    }, 300);
+}
 
         function performAtomicSync(actionCallback, successMsg, uiCallback) {
             if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) {
