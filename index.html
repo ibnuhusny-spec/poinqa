@@ -52,24 +52,14 @@
       const supabaseUrl = 'https://gquohpkbygzkuybgblmp.supabase.co';
       const supabaseKey = 'sb_publishable_xcOviXGQvu-Ua3U3sRY_wg_AHlCMYMt'; 
       const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
-      
       if (window.self === window.top) {
-        _supabase.auth.getSession().then(({ data }) => {
-          if (!data.session) {
-            window.location.replace("https://portal-terpadu.vercel.app/");
-          }
-        });
-      } else {
-        console.log("Mode Pratinjau: Redirect portal dinonaktifkan agar bisa dites.");
-      }
+        _supabase.auth.getSession().then(({ data }) => { if (!data.session) window.location.replace("https://portal-terpadu.vercel.app/"); });
+      } else { console.log("Mode Pratinjau"); }
     </script>
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800">
-
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
-    <form id="syncForm" method="POST" target="hidden_iframe" style="display:none;">
-        <input type="hidden" name="data" id="syncDataInput">
-    </form>
+    <form id="syncForm" method="POST" target="hidden_iframe" style="display:none;"><input type="hidden" name="data" id="syncDataInput"></form>
     <input type="file" id="excelInput" accept=".xlsx, .xls" style="display:none" onchange="processExcel(event)">
 
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative overflow-hidden flex flex-col">
@@ -88,9 +78,8 @@
 
     <script>
         // =========================================================================
-        // WAJIB DIISI OLEH DEVELOPER: LINK APPS SCRIPT MASTER ANDA
-        // =========================================================================
         const MASTER_API_URL = "https://script.google.com/macros/s/AKfycbxuZ8E8UOyB78o-e0KvvKCcvU14QVK5WjD5JC49auTmw3ix0BoW7xni0AMKm1gsM6VF/exec"; 
+        // =========================================================================
 
         const defaultSchoolData = { name: "6", location: "Nama Sekolah", city: "Kabupaten Maros", logo: "./logo.png", sheetId: "", teacherPassword: "QA-Poin77", lastUpdate: 0 };
         const initialBehaviors = [
@@ -189,18 +178,12 @@
             else { isSyncing = false; dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; }
         }
 
-        window.addEventListener('beforeunload', function (e) { if (isSyncing || pendingSync) { e.preventDefault(); e.returnValue = ''; } });
-
         // =========================================================================
-        // PENGIRIMAN KE MASTER API URL (DILENGKAPI DAFTAR HITAM SISWA)
+        // PENGIRIMAN & PENARIKAN DATA SUPER AMAN
         // =========================================================================
         function syncToCloud() {
             if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) return; 
             clearTimeout(debounceTimer); pendingSync = true; updateSyncUI('loading');
-            
-            // ANTI-GHOST: Hapus paksa NIS aktif dari daftar hitam sebelum dikirim
-            let activeNis = students.map(s => String(s.nis));
-            deletedStudentNis = deletedStudentNis.filter(n => !activeNis.includes(n));
             
             const lightStudents = students.map(s => { const { photo, studentPhoto, teacherCoverPhoto, studentCoverPhoto, ...sisa } = s; return sisa; });
             const payload = { sheetId: schoolData.sheetId, schoolData, students: lightStudents, logs, behaviors, deletedLogIds, deletedStudentNis };
@@ -216,6 +199,58 @@
             }, 300);
         }
 
+        function loadFromCloud(isManual = false) {
+            if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) return; 
+            if(isManual) Swal.fire({title: 'Menyinkronkan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+            else updateSyncUI('loading');
+
+            fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
+                if(data.error) throw new Error(data.error);
+                
+                // ANTI-DOWNGRADE (MENCEGAH DATA HILANG KARENA REFRESH CEPAT)
+                const localTime = schoolData.lastUpdate || 0;
+                const cloudTime = (data.schoolData && data.schoolData.lastUpdate) ? data.schoolData.lastUpdate : 0;
+                
+                if (localTime > cloudTime && !isManual) {
+                    syncToCloud(); 
+                    if(isManual) Swal.close();
+                    return;
+                }
+
+                // Sinkronisasi Daftar Hitam
+                let cloudDeleted = data.deletedLogIds || [];
+                deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
+                let cloudDeletedStudents = data.deletedStudentNis || [];
+                deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
+
+                let logMap = new Map();
+                (data.logs || []).forEach(l => logMap.set(l.id, l));
+                logs.forEach(l => logMap.set(l.id, l));
+                logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
+
+                if(data.students && data.students.length > 0) {
+                    let validCloudStudents = data.students.filter(s => !deletedStudentNis.includes(String(s.nis)));
+                    students = validCloudStudents.map(cloudS => {
+                        const localS = students.find(l => String(l.nis) === String(cloudS.nis));
+                        return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
+                    });
+                }
+                if(data.behaviors) behaviors = data.behaviors;
+                if(data.schoolData) {
+                    schoolData = {...schoolData, ...data.schoolData};
+                    schoolData.lastUpdate = cloudTime > localTime ? cloudTime : localTime;
+                }
+
+                saveData(true); 
+                updateSyncUI('success');
+                if(isManual) Swal.fire({title:'Sinkronisasi Selesai', icon:'success', timer:1000, showConfirmButton:false}).then(refreshActiveUI); 
+                else refreshActiveUI();
+            }).catch(e => { 
+                if(isManual) Swal.fire('Gagal', e.message || 'Koneksi internet error.', 'error'); 
+                updateSyncUI('error'); 
+            });
+        }
+        
         function performAtomicSync(actionCallback, successMsg, uiCallback) {
             if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) {
                 actionCallback(); saveData(false);
@@ -226,14 +261,9 @@
             
             fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
                 if(data.error) throw new Error(data.error);
-                
-                // Sinkronisasi Daftar Hitam - ANTI GHOST
-                let incomingActiveNis = (data.students || []).map(s => String(s.nis));
                 let cloudDeleted = data.deletedLogIds || [];
                 deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
-                
-                let cloudDeletedStudents = (data.deletedStudentNis || []).filter(n => !incomingActiveNis.includes(n));
-                deletedStudentNis = deletedStudentNis.filter(n => !incomingActiveNis.includes(n));
+                let cloudDeletedStudents = data.deletedStudentNis || [];
                 deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
 
                 let logMap = new Map();
@@ -242,7 +272,6 @@
                 logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
 
                 if(data.students && data.students.length > 0) {
-                    // Buang siswa yang ada di daftar hitam dari kiriman awan
                     let validCloudStudents = data.students.filter(s => !deletedStudentNis.includes(String(s.nis)));
                     students = validCloudStudents.map(cloudS => {
                         const localS = students.find(l => String(l.nis) === String(cloudS.nis));
@@ -260,52 +289,6 @@
                 actionCallback(); saveData(false);
                 if(successMsg) Swal.fire('Tersimpan Lokal', 'Sinyal terputus. Data disimpan di HP.', 'success').then(uiCallback);
                 else { Swal.close(); if(uiCallback) uiCallback(); }
-            });
-        }
-
-        function loadFromCloud(isManual = false) {
-            if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) return; 
-            if(isManual) Swal.fire({title: 'Menyinkronkan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
-            else updateSyncUI('loading');
-
-            fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
-                if(data.error) throw new Error(data.error);
-                
-                // Sinkronisasi Daftar Hitam - ANTI GHOST
-                let incomingActiveNis = (data.students || []).map(s => String(s.nis));
-                let cloudDeleted = data.deletedLogIds || [];
-                deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
-                
-                let cloudDeletedStudents = (data.deletedStudentNis || []).filter(n => !incomingActiveNis.includes(n));
-                deletedStudentNis = deletedStudentNis.filter(n => !incomingActiveNis.includes(n));
-                deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
-
-                let logMap = new Map();
-                (data.logs || []).forEach(l => logMap.set(l.id, l));
-                logs.forEach(l => logMap.set(l.id, l));
-                logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
-
-                if(data.students && data.students.length > 0) {
-                    let validCloudStudents = data.students.filter(s => !deletedStudentNis.includes(String(s.nis)));
-                    students = validCloudStudents.map(cloudS => {
-                        const localS = students.find(l => String(l.nis) === String(cloudS.nis));
-                        return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
-                    });
-                }
-                if(data.behaviors) behaviors = data.behaviors;
-                if(data.schoolData) {
-                    const localTime = schoolData.lastUpdate;
-                    schoolData = {...schoolData, ...data.schoolData};
-                    if (localTime > (data.schoolData.lastUpdate || 0)) schoolData.lastUpdate = localTime;
-                }
-
-                saveData(true); 
-                updateSyncUI('success');
-                if(isManual) Swal.fire({title:'Sinkronisasi Selesai', icon:'success', timer:1000, showConfirmButton:false}).then(refreshActiveUI); 
-                else refreshActiveUI();
-            }).catch(e => { 
-                if(isManual) Swal.fire('Gagal', e.message || 'Koneksi internet error.', 'error'); 
-                updateSyncUI('error'); 
             });
         }
         // =========================================================================
@@ -356,9 +339,7 @@
             currentScreen = 'teacher_dashboard'; currentViewedNis = null;
             let listHTML = students.length === 0 ? `<div class="text-center py-10 text-gray-400"><i class="fas fa-users-slash text-4xl mb-2"></i><br>Belum ada data siswa.</div>` : '';
             students.forEach(s => { const tp = logs.filter(l => String(l.studentId) === String(s.nis)).reduce((sum, c) => sum + Number(c.points), 0); const dp = s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'; listHTML += `<div onclick="renderStudentDetail('${s.nis}')" class="bg-white p-4 rounded-xl shadow border-l-4 ${tp>=0?'border-green-400':'border-red-400'} mb-3 flex justify-between cursor-pointer"><div class="flex items-center gap-3"><div class="w-12 h-12 rounded-full bg-gray-200 overflow-hidden"><img src="${dp}" class="w-full h-full object-cover"></div><div><h3 class="font-bold text-gray-800">${s.name}</h3><p class="text-xs text-gray-500">${s.kelas} | ${s.nis}</p></div></div><div class="font-bold text-xl flex items-center ${tp>=0?'text-green-600':'text-red-500'}">${tp>0?'+':''}${tp}</div></div>`; });
-            
             let deleteAllBtn = students.length > 0 ? `<button onclick="deleteAllStudents()" class="w-full mt-4 py-2 text-red-500 border border-red-500 rounded-lg text-sm font-bold"><i class="fas fa-trash-alt mr-1"></i> Hapus Semua Data Siswa</button>` : '';
-
             const html = `<div class="px-4 pb-20 fade-in"><h2 class="text-2xl font-bold mb-4">Dashboard Guru</h2><div class="grid grid-cols-2 gap-3 mb-3"><button onclick="renderAddStudent()" class="btn-3d btn-blue py-3 rounded-lg text-sm font-bold"><i class="fas fa-user-plus mr-1"></i> Tambah Siswa</button><button onclick="renderManageBehaviors()" class="btn-3d btn-purple py-3 rounded-lg text-sm font-bold"><i class="fas fa-list-check mr-1"></i> Atur Poin</button></div><div class="grid grid-cols-2 gap-3 mb-6"><button onclick="exportToExcel()" class="btn-3d btn-green py-3 rounded-lg text-sm font-bold"><i class="fas fa-file-excel mr-1"></i> Excel</button><button onclick="renderSetup()" class="btn-3d btn-gray py-3 rounded-lg text-sm font-bold"><i class="fas fa-cog mr-1"></i> Setting</button></div><div class="relative mb-4"><input type="text" id="searchStudent" onkeyup="filterStudents()" placeholder="Cari nama siswa..." class="w-full p-3 pl-10 rounded-lg border focus:ring-2 focus:ring-blue-400"><i class="fas fa-search absolute left-3 top-3.5 text-gray-400"></i></div><div id="studentListContainer">${listHTML}</div>${deleteAllBtn}</div>`;
             document.getElementById('appContent').innerHTML = html;
         }
@@ -440,13 +421,9 @@
                     Swal.fire({ title: 'Menyiapkan Profil...', didOpen: () => { Swal.showLoading(); }}); 
                     fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r=>r.json()).then(data => { 
                         if(data.error) throw new Error(data.error);
-                        
                         let cloudDeletedStudents = data.deletedStudentNis || [];
                         deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
-
-                        if(data.students) {
-                            students = data.students.filter(st => !deletedStudentNis.includes(String(st.nis)));
-                        }
+                        if(data.students) { students = data.students.filter(st => !deletedStudentNis.includes(String(st.nis))); }
                         if(data.logs) logs = data.logs; 
                         if(data.behaviors) behaviors = data.behaviors; 
                         saveData(true); 
@@ -495,7 +472,6 @@
         function renderSetup() { 
             currentScreen = 'setup'; 
             const html = `<div class="pt-10 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold mb-4">Pengaturan</h2>
-            
             <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
                 <h3 class="font-bold text-blue-800 mb-1">Sambungkan Database</h3>
                 <p class="text-[10px] text-gray-500 mb-3">Tempelkan Link Google Sheet kelas Anda di bawah ini:</p>
@@ -503,7 +479,6 @@
                 <button onclick="checkConnectionAndSave(document.querySelector('#sheetIdInput').value)" class="w-full btn-3d btn-blue py-3 rounded-lg font-bold mb-3">Simpan Database</button>
                 <button onclick="copyShareLink()" class="w-full btn-3d btn-orange py-3 rounded-lg font-bold text-sm"><i class="fas fa-share-alt mr-2"></i> Salin Link Murid (Umum)</button>
             </div>
-            
             <div class="bg-gray-50 p-4 rounded-xl border mb-4"><h3 class="font-bold mb-2">Profil & Excel</h3><div class="flex justify-center mb-4"><div class="relative w-24 h-24"><div class="w-full h-full bg-white rounded-full overflow-hidden border-4 border-gray-200 shadow flex items-center justify-center"><img src="${schoolData.logo}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div><button onclick="document.getElementById('schoolLogoInput').click()" class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center border-2 border-white"><i class="fas fa-camera"></i></button><input type="file" id="schoolLogoInput" accept="image/*" class="hidden" onchange="previewSchoolLogo(event)"></div></div><div class="space-y-3"><label class="text-[10px] font-bold text-gray-500 uppercase">Nama Kelas (Contoh: 6)</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-3 border rounded font-bold"><label class="text-[10px] font-bold text-gray-500 uppercase block">Nama Sekolah</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-3 border rounded"><label class="text-[10px] font-bold text-gray-500 uppercase block">Kabupaten/Kota (Untuk Kop Excel)</label><input type="text" id="sCity" value="${schoolData.city}" class="w-full p-3 border rounded"><label class="text-[10px] font-bold text-gray-500 uppercase block">Password Guru</label><input type="text" id="tPass" value="${schoolData.teacherPassword || 'QA-Poin77'}" class="w-full p-3 border rounded text-red-600 font-bold"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl font-bold text-white mt-6">Simpan Profil & Password</button></div><button onclick="resetAll()" class="w-full py-3 mt-8 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div>`; 
             document.getElementById('appContent').innerHTML = html; 
         }
@@ -514,24 +489,13 @@
 
         function checkConnectionAndSave(inputValue) { 
             if(!inputValue) return Swal.fire('Error', 'ID atau Link tidak boleh kosong', 'error'); 
-            
             let sheetId = inputValue.trim();
-            if (sheetId.includes('/d/')) {
-                const match = sheetId.match(/\/d\/([a-zA-Z0-9-_]+)/);
-                if (match && match[1]) { sheetId = match[1]; }
-            }
-
-            if(!MASTER_API_URL || !MASTER_API_URL.startsWith("http")) {
-                return Swal.fire('Error Sistem', 'Developer belum memasukkan MASTER API URL di dalam kode HTML.', 'error');
-            }
+            if (sheetId.includes('/d/')) { const match = sheetId.match(/\/d\/([a-zA-Z0-9-_]+)/); if (match && match[1]) { sheetId = match[1]; } }
+            if(!MASTER_API_URL || !MASTER_API_URL.startsWith("http")) return Swal.fire('Error Sistem', 'Developer belum memasukkan MASTER API URL di dalam kode HTML.', 'error');
 
             Swal.fire({ title: 'Menghubungkan Database...', didOpen: () => { Swal.showLoading(); } }); 
-            
             fetch(MASTER_API_URL + '?action=read&sheetId=' + sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
-                if(data.error) {
-                    return Swal.fire('Gagal Akses', data.error, 'error');
-                }
-                
+                if(data.error) return Swal.fire('Gagal Akses', data.error, 'error');
                 schoolData.sheetId = sheetId;
                 if(data.students && data.students.length > 0) {
                     schoolData = {...schoolData, ...data.schoolData, sheetId: sheetId}; students = data.students;
@@ -554,18 +518,13 @@
         }
 
         window.previewAddPhoto = async function(e) { const f = e.target.files[0]; if(f) { Swal.fire({title: 'Memproses...', didOpen: () => Swal.showLoading()}); tempAddPhoto = await compressImage(f, false); document.getElementById('addPhotoPreview').src = tempAddPhoto; document.getElementById('addPhotoPreview').classList.remove('hidden'); document.getElementById('addPhotoPlaceholder').classList.add('hidden'); Swal.close(); } }
-
+        
         function handleAddSubmit(e) { 
-            e.preventDefault(); 
-            const f = e.target, nis = String(f.nis.value).trim(); 
+            e.preventDefault(); const f = e.target, nis = String(f.nis.value).trim(); 
             if(students.find(s => String(s.nis).trim() === nis)) return Swal.fire('Gagal', 'NIS sudah ada', 'error'); 
-            
-            // Hapus paksa dari daftar hitam jika ditambahkan ulang
             deletedStudentNis = deletedStudentNis.filter(n => String(n) !== nis);
-            
             students.push({ name: f.name.value, nis: nis, kelas: f.kelas.value, dob: f.dob.value, photo: tempAddPhoto, studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
-            saveData(); 
-            Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); 
+            saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); 
         }
         
         function renderEditStudent(nis) { 
@@ -575,71 +534,34 @@
         }
 
         function handleUpdateStudent(e, oldNis) { 
-            e.preventDefault(); 
-            const f = e.target;
+            e.preventDefault(); const f = e.target;
             performAtomicSync(() => {
                 const idx = students.findIndex(s => String(s.nis) === String(oldNis)); 
-                if (idx !== -1) { 
-                    students[idx] = { ...students[idx], name: f.name.value, kelas: f.kelas.value, dob: f.dob.value }; 
-                }
+                if (idx !== -1) { students[idx] = { ...students[idx], name: f.name.value, kelas: f.kelas.value, dob: f.dob.value }; }
             }, 'Data berhasil diperbarui', () => renderStudentDetail(oldNis));
         }
 
         function deleteStudent(nis) { 
-            Swal.fire({ 
-                title: 'Hapus Siswa?', 
-                text: "Semua riwayat poin siswa ini juga akan terhapus.", 
-                icon: 'warning', 
-                showCancelButton: true, 
-                confirmButtonColor: '#d33' 
-            }).then(r => { 
+            Swal.fire({ title: 'Hapus Siswa?', text: "Semua riwayat poin siswa ini juga akan terhapus.", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(r => { 
                 if(r.isConfirmed) { 
                     performAtomicSync(() => { 
-                        // Tambahkan NIS ke daftar hitam SEBELUM menyimpan
-                        if(!deletedStudentNis.includes(String(nis))) {
-                             deletedStudentNis.push(String(nis)); 
-                        }
-                        
+                        deletedStudentNis.push(String(nis));
                         students = students.filter(s => String(s.nis) !== String(nis)); 
-                        
                         let logsToDel = logs.filter(l => String(l.studentId) === String(nis));
-                        logsToDel.forEach(l => {
-                            if(!deletedLogIds.includes(l.id)) deletedLogIds.push(l.id);
-                        });
+                        logsToDel.forEach(l => deletedLogIds.push(l.id));
                         logs = logs.filter(l => String(l.studentId) !== String(nis)); 
-                        
-                        // Penting: Simpan daftar hitam yang baru ke LocalStorage secara eksplisit
-                        localStorage.setItem('deletedStudentNis', JSON.stringify(deletedStudentNis));
-                    }, 'Siswa berhasil dihapus', () => {
-                        if (currentScreen === 'edit_student' || currentScreen === 'teacher_detail') renderTeacherDashboard();
-                    }); 
+                    }, 'Siswa berhasil dihapus', () => { if (currentScreen === 'edit_student' || currentScreen === 'teacher_detail') renderTeacherDashboard(); }); 
                 } 
             }); 
         }
 
         function deleteAllStudents() {
-            Swal.fire({ 
-                title: 'Hapus SEMUA Siswa?', 
-                text: "Data ini tidak bisa dikembalikan!", 
-                icon: 'error', 
-                showCancelButton: true, 
-                confirmButtonColor: '#d33',
-                confirmButtonText: 'Ya, Hapus Semua'
-            }).then(r => { 
+            Swal.fire({ title: 'Hapus SEMUA Siswa?', text: "Data ini tidak bisa dikembalikan!", icon: 'error', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Ya, Hapus Semua' }).then(r => { 
                 if(r.isConfirmed) { 
                     performAtomicSync(() => { 
-                        students.forEach(s => {
-                            if(!deletedStudentNis.includes(String(s.nis))) deletedStudentNis.push(String(s.nis));
-                        });
-                        logs.forEach(l => {
-                             if(!deletedLogIds.includes(l.id)) deletedLogIds.push(l.id);
-                        });
-                        
-                        students = []; 
-                        logs = []; 
-                        
-                        // Penting: Simpan daftar hitam yang baru ke LocalStorage
-                        localStorage.setItem('deletedStudentNis', JSON.stringify(deletedStudentNis));
+                        students.forEach(s => deletedStudentNis.push(String(s.nis)));
+                        logs.forEach(l => deletedLogIds.push(l.id));
+                        students = []; logs = []; 
                     }, 'Semua data siswa berhasil dihapus', () => renderTeacherDashboard()); 
                 } 
             });
@@ -697,9 +619,7 @@
                         const nis = String(row[1]).trim(); let dob = "";
                         if(row[3]) { if(!isNaN(row[3]) && typeof row[3] === 'number') { let d = new Date((row[3] - 25569) * 86400000); dob = d.toISOString().split('T')[0]; } else { dob = String(row[3]).trim(); } }
                         if(!students.find(s => String(s.nis) === nis)) {
-                            // Hapus paksa dari daftar hitam jika ada di Excel
                             deletedStudentNis = deletedStudentNis.filter(n => String(n) !== nis);
-                            
                             students.push({ name: row[0], nis: nis, kelas: row[2] || "-", dob: dob, photo: "", studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
                         }
                     }
