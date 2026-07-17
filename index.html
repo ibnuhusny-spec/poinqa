@@ -121,7 +121,8 @@
             logs = JSON.parse(localStorage.getItem('logs')) || [];
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
             deletedLogIds = JSON.parse(localStorage.getItem('deletedLogIds')) || [];
-            deletedStudentNis = JSON.parse(localStorage.getItem('deletedStudentNis')) || [];
+            // Format ulang NIS yang dihapus agar aman
+            deletedStudentNis = (JSON.parse(localStorage.getItem('deletedStudentNis')) || []).map(n => String(n).trim().toLowerCase());
             ensureSystemBehaviors();
         } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; deletedLogIds = []; deletedStudentNis = []; }
 
@@ -186,6 +187,7 @@
             }, 300);
         }
 
+        // ================= PERBAIKAN LOGIKA CLOUD SYNC & ANTI-BLACKLIST =================
         function loadFromCloud(isManual = false) {
             if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) return; 
             if(isManual) Swal.fire({title: 'Menyinkronkan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
@@ -205,8 +207,17 @@
 
                 let cloudDeleted = data.deletedLogIds || [];
                 deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
+                
+                let cloudStudents = data.students || [];
+                let activeCloudNis = cloudStudents.map(st => String(st.nis).trim().toLowerCase());
+                
+                // ANTI-GHOST: Jika siswa ADA di daftar aktif awan, HAPUS dia dari daftar hitam lokal & awan.
                 let cloudDeletedStudents = data.deletedStudentNis || [];
-                deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
+                cloudDeletedStudents = cloudDeletedStudents.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
+                deletedStudentNis = deletedStudentNis.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
+                
+                // Baru setelah dibersihkan, kita gabungkan
+                deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents.map(n=>String(n).trim().toLowerCase())])];
 
                 let logMap = new Map();
                 (data.logs || []).forEach(l => logMap.set(l.id, l));
@@ -214,9 +225,9 @@
                 logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
 
                 if(data.students && data.students.length > 0) {
-                    let validCloudStudents = data.students.filter(s => !deletedStudentNis.includes(String(s.nis)));
+                    let validCloudStudents = cloudStudents.filter(s => !deletedStudentNis.includes(String(s.nis).trim().toLowerCase()));
                     students = validCloudStudents.map(cloudS => {
-                        const localS = students.find(l => String(l.nis) === String(cloudS.nis));
+                        const localS = students.find(l => String(l.nis).trim().toLowerCase() === String(cloudS.nis).trim().toLowerCase());
                         return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
                     });
                 }
@@ -248,8 +259,15 @@
                 if(data.error) throw new Error(data.error);
                 let cloudDeleted = data.deletedLogIds || [];
                 deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
+                
+                let cloudStudents = data.students || [];
+                let activeCloudNis = cloudStudents.map(st => String(st.nis).trim().toLowerCase());
+                
+                // ANTI-GHOST ATOMIC:
                 let cloudDeletedStudents = data.deletedStudentNis || [];
-                deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
+                cloudDeletedStudents = cloudDeletedStudents.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
+                deletedStudentNis = deletedStudentNis.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
+                deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents.map(n=>String(n).trim().toLowerCase())])];
 
                 let logMap = new Map();
                 (data.logs || []).forEach(l => logMap.set(l.id, l));
@@ -257,9 +275,9 @@
                 logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
 
                 if(data.students && data.students.length > 0) {
-                    let validCloudStudents = data.students.filter(s => !deletedStudentNis.includes(String(s.nis)));
+                    let validCloudStudents = cloudStudents.filter(s => !deletedStudentNis.includes(String(s.nis).trim().toLowerCase()));
                     students = validCloudStudents.map(cloudS => {
-                        const localS = students.find(l => String(l.nis) === String(cloudS.nis));
+                        const localS = students.find(l => String(l.nis).trim().toLowerCase() === String(cloudS.nis).trim().toLowerCase());
                         return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
                     });
                 }
@@ -276,13 +294,14 @@
                 else { Swal.close(); if(uiCallback) uiCallback(); }
             });
         }
+        // =========================================================================
         
         function refreshActiveUI() {
             if(currentScreen === 'teacher_dashboard') renderTeacherDashboard();
             if(currentScreen === 'manage_behaviors') renderManageBehaviors();
             if(currentScreen === 'teacher_detail' && currentViewedNis) renderStudentDetail(currentViewedNis);
             if(currentScreen === 'student_dashboard' && currentViewedNis) {
-                const s = students.find(x => String(x.nis).trim() === String(currentViewedNis).trim());
+                const s = students.find(x => String(x.nis).trim().toLowerCase() === String(currentViewedNis).trim().toLowerCase());
                 if(s) renderStudentDashboard(s);
             }
         }
@@ -322,7 +341,7 @@
         function renderTeacherDashboard() {
             currentScreen = 'teacher_dashboard'; currentViewedNis = null;
             let listHTML = students.length === 0 ? `<div class="text-center py-10 text-gray-400"><i class="fas fa-users-slash text-4xl mb-2"></i><br>Belum ada data siswa.</div>` : '';
-            students.forEach(s => { const tp = logs.filter(l => String(l.studentId) === String(s.nis)).reduce((sum, c) => sum + Number(c.points), 0); const dp = s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'; listHTML += `<div onclick="renderStudentDetail('${s.nis}')" class="bg-white p-4 rounded-xl shadow border-l-4 ${tp>=0?'border-green-400':'border-red-400'} mb-3 flex justify-between cursor-pointer"><div class="flex items-center gap-3"><div class="w-12 h-12 rounded-full bg-gray-200 overflow-hidden"><img src="${dp}" class="w-full h-full object-cover"></div><div><h3 class="font-bold text-gray-800">${s.name}</h3><p class="text-xs text-gray-500">${s.kelas} | ${s.nis}</p></div></div><div class="font-bold text-xl flex items-center ${tp>=0?'text-green-600':'text-red-500'}">${tp>0?'+':''}${tp}</div></div>`; });
+            students.forEach(s => { const tp = logs.filter(l => String(l.studentId).trim().toLowerCase() === String(s.nis).trim().toLowerCase()).reduce((sum, c) => sum + Number(c.points), 0); const dp = s.photo || 'https://cdn-icons-png.flaticon.com/512/194/194938.png'; listHTML += `<div onclick="renderStudentDetail('${s.nis}')" class="bg-white p-4 rounded-xl shadow border-l-4 ${tp>=0?'border-green-400':'border-red-400'} mb-3 flex justify-between cursor-pointer"><div class="flex items-center gap-3"><div class="w-12 h-12 rounded-full bg-gray-200 overflow-hidden"><img src="${dp}" class="w-full h-full object-cover"></div><div><h3 class="font-bold text-gray-800">${s.name}</h3><p class="text-xs text-gray-500">${s.kelas} | ${s.nis}</p></div></div><div class="font-bold text-xl flex items-center ${tp>=0?'text-green-600':'text-red-500'}">${tp>0?'+':''}${tp}</div></div>`; });
             let deleteAllBtn = students.length > 0 ? `<button onclick="deleteAllStudents()" class="w-full mt-4 py-2 text-red-500 border border-red-500 rounded-lg text-sm font-bold"><i class="fas fa-trash-alt mr-1"></i> Hapus Semua Data Siswa</button>` : '';
             const html = `<div class="px-4 pb-20 fade-in"><h2 class="text-2xl font-bold mb-4">Dashboard Guru</h2><div class="grid grid-cols-2 gap-3 mb-3"><button onclick="renderAddStudent()" class="btn-3d btn-blue py-3 rounded-lg text-sm font-bold"><i class="fas fa-user-plus mr-1"></i> Tambah Siswa</button><button onclick="renderManageBehaviors()" class="btn-3d btn-purple py-3 rounded-lg text-sm font-bold"><i class="fas fa-list-check mr-1"></i> Atur Poin</button></div><div class="grid grid-cols-2 gap-3 mb-6"><button onclick="exportToExcel()" class="btn-3d btn-green py-3 rounded-lg text-sm font-bold"><i class="fas fa-file-excel mr-1"></i> Excel</button><button onclick="renderSetup()" class="btn-3d btn-gray py-3 rounded-lg text-sm font-bold"><i class="fas fa-cog mr-1"></i> Setting</button></div><div class="relative mb-4"><input type="text" id="searchStudent" onkeyup="filterStudents()" placeholder="Cari nama siswa..." class="w-full p-3 pl-10 rounded-lg border focus:ring-2 focus:ring-blue-400"><i class="fas fa-search absolute left-3 top-3.5 text-gray-400"></i></div><div id="studentListContainer">${listHTML}</div>${deleteAllBtn}</div>`;
             document.getElementById('appContent').innerHTML = html;
@@ -332,8 +351,8 @@
 
         function renderStudentDetail(nis, activeTab = 'good') {
             currentScreen = 'teacher_detail'; currentViewedNis = nis;
-            const s = students.find(x => String(x.nis) === String(nis)); if(!s) return;
-            const sl = logs.filter(l => String(l.studentId) === String(nis)), pp = sl.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0), np = sl.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0), tp = pp + np;
+            const s = students.find(x => String(x.nis).trim().toLowerCase() === String(nis).trim().toLowerCase()); if(!s) return;
+            const sl = logs.filter(l => String(l.studentId).trim().toLowerCase() === String(nis).trim().toLowerCase()), pp = sl.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0), np = sl.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0), tp = pp + np;
             const gb = behaviors.filter(b => b.type === 'plus' && !(b.id >= 101 && b.id <= 106)).map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div><span class="point-badge">+${b.points}</span></button>`).join(''), bb = behaviors.filter(b => b.type === 'minus' && !(b.id >= 201 && b.id <= 206)).map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="list-item-card item-bad"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div><span class="point-badge">${b.points}</span></button>`).join('');
             let fh = activeTab === 'good' ? sl.filter(l => l.points > 0) : (activeTab === 'bad' ? sl.filter(l => l.points < 0) : sl.filter(l => l.note)); fh.sort((a,b)=>b.id-a.id);
             const hl = fh.map(l => `<div class="flex justify-between items-center bg-white border rounded-lg p-2 mb-2 shadow-sm"><div class="w-3/4"><div class="font-bold text-xs">${l.behaviorLabel}</div>${l.note ? `<div class="text-[10px] text-blue-500 italic mt-0.5">"${l.note}"</div>` : ''}<div class="text-[9px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div><div class="flex items-center gap-2"><span class="font-bold text-sm ${l.points>=0?'text-green-600':'text-red-500'}">${l.points>0?'+':''}${l.points}</span><button onclick="deleteLog(${l.id}, '${nis}', '${activeTab}')" class="text-gray-400 hover:text-red-500 px-2"><i class="fas fa-trash"></i></button></div></div>`).join('') || '<div class="text-center text-xs text-gray-400 py-2">Belum ada riwayat.</div>';
@@ -342,12 +361,10 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
-        // PERBAIKAN 1: Pengambilan base url untuk copy link orang tua 
-        // Menggunakan window.location.origin + pathname agar bebas gangguan hashtag #
         window.copyPersonalLink = function(nis) { 
             if(!schoolData.sheetId) return Swal.fire('Gagal', 'ID Database belum diatur', 'error'); 
             const baseUrl = window.location.origin + window.location.pathname;
-            const sn = students.find(s=>String(s.nis)===String(nis)).name;
+            const sn = students.find(s=>String(s.nis).trim().toLowerCase()===String(nis).trim().toLowerCase()).name;
             const fl = `${baseUrl}?sid=${encodeURIComponent(schoolData.sheetId)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&city=${encodeURIComponent(schoolData.city)}&mode=student_locked&nis=${encodeURIComponent(nis)}`; 
             const el = document.createElement('textarea'); el.value = fl; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); 
             Swal.fire({ title: 'Link Tersalin!', html: `Kirimkan link ini ke WhatsApp orang tua <b>${sn}</b>.`, icon: 'success' }); 
@@ -368,7 +385,7 @@
             const b = behaviors.find(x => String(x.id) === String(bid)); 
             if(b) { 
                 performAtomicSync(() => {
-                    const sn = students.find(s=>String(s.nis)===String(nis)).name; 
+                    const sn = students.find(s=>String(s.nis).trim().toLowerCase()===String(nis).trim().toLowerCase()).name; 
                     logs.push({ id: Date.now(), studentId: nis, studentName: sn, behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() }); 
                 }, `${b.label} (${b.points})`, () => renderStudentDetail(nis, ct));
             } 
@@ -380,12 +397,12 @@
             if(txt.length > 500) return Swal.fire('Error', 'Pesan maksimal 500 karakter.', 'error'); 
             
             performAtomicSync(() => {
-                const sn = students.find(s=>String(s.nis)===String(nis)).name; 
+                const sn = students.find(s=>String(s.nis).trim().toLowerCase()===String(nis).trim().toLowerCase()).name; 
                 logs.push({ id: Date.now(), studentId: nis, studentName: sn, behaviorLabel: "Catatan Guru", points: 0, type: 'neutral', note: txt, date: new Date().toISOString() }); 
             }, 'Pesan Terkirim', () => renderStudentDetail(nis, 'note'));
         }
 
-        window.isLoggedToday = function(nis, label) { const today = new Date().toLocaleDateString('id-ID'); return logs.some(l => String(l.studentId) === String(nis) && l.behaviorLabel === label && new Date(l.date).toLocaleDateString('id-ID') === today); }
+        window.isLoggedToday = function(nis, label) { const today = new Date().toLocaleDateString('id-ID'); return logs.some(l => String(l.studentId).trim().toLowerCase() === String(nis).trim().toLowerCase() && l.behaviorLabel === label && new Date(l.date).toLocaleDateString('id-ID') === today); }
         
         function reportSalat(nis, bid) { 
             if (isSpamDetected()) return; 
@@ -394,9 +411,9 @@
             Swal.fire({ title: isPos ? 'Lapor Salat?' : 'Lapor Tidak Salat?', text: isPos ? `Apakah kamu sudah melaksanakan ${b.label}?` : `Astagfirullah, benar kamu meninggalkan ${b.label.replace('Tidak ', '')}?`, icon: 'question', showCancelButton: true, confirmButtonColor: isPos ? '#14b8a6' : '#ef4444', confirmButtonText: isPos ? 'Ya, Sudah' : 'Ya, Tidak' }).then((result) => { 
                 if(result.isConfirmed) { 
                     performAtomicSync(() => {
-                        const sn = students.find(s=>String(s.nis)===String(nis)).name; 
+                        const sn = students.find(s=>String(s.nis).trim().toLowerCase()===String(nis).trim().toLowerCase()).name; 
                         logs.push({ id: Date.now(), studentId: nis, studentName: sn, behaviorLabel: b.label, points: Number(b.points), type: b.type, date: new Date().toISOString() }); 
-                    }, `Poin ${b.points > 0 ? '+'+b.points : b.points} ditambahkan.`, () => renderStudentDashboard(students.find(s=>String(s.nis)===String(nis)), 'salat'));
+                    }, `Poin ${b.points > 0 ? '+'+b.points : b.points} ditambahkan.`, () => renderStudentDashboard(students.find(s=>String(s.nis).trim().toLowerCase()===String(nis).trim().toLowerCase()), 'salat'));
                 } 
             }); 
         }
@@ -405,7 +422,7 @@
         
         function handleLoginManual() { const nis = document.getElementById('loginNis').value.trim(); if(!nis) return Swal.fire('Tunggu', 'Masukkan NIS!', 'warning'); handleAutoLogin(nis); }
         
-        // PERBAIKAN 2: Proteksi agar lockedStudentNis tidak terhapus begitu saja jika masalah koneksi.
+        // ================= PERBAIKAN LOGIKA CLOUD LOGIN MURID =================
         window.handleAutoLogin = function(nis) { 
             const cleanNis = String(nis).trim().toLowerCase();
             const s = students.find(x => String(x.nis).trim().toLowerCase() === cleanNis); 
@@ -418,14 +435,21 @@
                     Swal.fire({ title: 'Menyiapkan Profil...', didOpen: () => { Swal.showLoading(); }}); 
                     fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r=>r.json()).then(data => { 
                         if(data.error) throw new Error(data.error);
-                        let cloudDeletedStudents = data.deletedStudentNis || [];
-                        deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
                         
-                        // Perbaikan merger data profil agar foto yg belum tersync lokal tidak hilang
+                        let cloudStudents = data.students || [];
+                        let activeCloudNis = cloudStudents.map(st => String(st.nis).trim().toLowerCase());
+                        
+                        let cloudDeletedStudents = data.deletedStudentNis || [];
+                        // ANTI-GHOST ATOMIC: Paksa hapus dari blacklist jika siswa ada di daftar cloud terbaru
+                        cloudDeletedStudents = cloudDeletedStudents.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
+                        deletedStudentNis = deletedStudentNis.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
+                        
+                        deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents.map(n=>String(n).trim().toLowerCase())])];
+                        
                         if(data.students) { 
-                            let validCloudStudents = data.students.filter(st => !deletedStudentNis.includes(String(st.nis)));
+                            let validCloudStudents = cloudStudents.filter(st => !deletedStudentNis.includes(String(st.nis).trim().toLowerCase()));
                             students = validCloudStudents.map(cloudS => {
-                                const localS = students.find(l => String(l.nis) === String(cloudS.nis));
+                                const localS = students.find(l => String(l.nis).trim().toLowerCase() === String(cloudS.nis).trim().toLowerCase());
                                 return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
                             });
                         }
@@ -443,7 +467,6 @@
                         } 
                     }).catch(err => { 
                         Swal.fire('Error', err.message || 'Koneksi Gagal', 'error'); 
-                        // Jangan hapus lockedStudentNis kalau cuma error jaringan sesaat
                         renderSplash(); 
                     }); 
                 } else { 
@@ -456,7 +479,7 @@
 
         function renderStudentDashboard(s, activeTab = 'good') {
             currentScreen = 'student_dashboard'; currentViewedNis = s.nis;
-            const ml = logs.filter(l => String(l.studentId) === String(s.nis)).sort((a,b) => b.id - a.id), pp = ml.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0), np = ml.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0), tp = pp + np;
+            const ml = logs.filter(l => String(l.studentId).trim().toLowerCase() === String(s.nis).trim().toLowerCase()).sort((a,b) => b.id - a.id), pp = ml.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0), np = ml.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0), tp = pp + np;
             const notes = ml.filter(l => l.note), latestNote = notes.length > 0 ? notes[0] : null;
             let hasNewNote = false; if (latestNote) { const lr = localStorage.getItem(`lastReadNote_${s.nis}`); if (!lr || new Date(latestNote.date) > new Date(lr)) hasNewNote = true; }
             const dp = s.studentPhoto || 'https://cdn-icons-png.flaticon.com/512/194/194938.png', dc = s.studentCoverPhoto || 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=600&q=80';
@@ -484,7 +507,7 @@
 
         window.logoutLocked = function() { Swal.fire({ title: 'Keluar Profil?', text: 'Anda akan keluar. Untuk berganti ke profil saudara, silakan klik Link Akses Pribadi miliknya di WhatsApp.', icon: 'question', showCancelButton: true, confirmButtonText: 'Ya, Keluar' }).then((r) => { if(r.isConfirmed) { localStorage.removeItem('lockedStudentNis'); window.location.href = window.location.pathname; } }); }
         window.handleStudentTab = function(type, nis, ld) { setTab(type); if(type === 'note' && ld) { localStorage.setItem(`lastReadNote_${nis}`, ld); const b = document.getElementById('noteBadge'); if(b) b.style.display = 'none'; } }
-        window.updateImage = function(nis, type) { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = async (e) => { const f = e.target.files[0]; if(f) { Swal.fire({title: 'Memproses...', didOpen: () => Swal.showLoading()}); const ic = type.includes('Cover'); const b64 = await compressImage(f, ic); const idx = students.findIndex(s => String(s.nis) === String(nis)); if(idx !== -1) { if(type === 'teacherCover') students[idx].teacherCoverPhoto = b64; else if(type === 'teacherProfile') students[idx].photo = b64; else if(type === 'studentCover') students[idx].studentCoverPhoto = b64; else if(type === 'studentProfile') students[idx].studentPhoto = b64; saveData(); Swal.close(); if(type.includes('teacher')) renderStudentDetail(nis); else renderStudentDashboard(students[idx]); } } }; input.click(); }
+        window.updateImage = function(nis, type) { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = async (e) => { const f = e.target.files[0]; if(f) { Swal.fire({title: 'Memproses...', didOpen: () => Swal.showLoading()}); const ic = type.includes('Cover'); const b64 = await compressImage(f, ic); const idx = students.findIndex(s => String(s.nis).trim().toLowerCase() === String(nis).trim().toLowerCase()); if(idx !== -1) { if(type === 'teacherCover') students[idx].teacherCoverPhoto = b64; else if(type === 'teacherProfile') students[idx].photo = b64; else if(type === 'studentCover') students[idx].studentCoverPhoto = b64; else if(type === 'studentProfile') students[idx].studentPhoto = b64; saveData(); Swal.close(); if(type.includes('teacher')) renderStudentDetail(nis); else renderStudentDashboard(students[idx]); } } }; input.click(); }
 
         function renderSetup() { 
             currentScreen = 'setup'; 
@@ -500,7 +523,6 @@
             document.getElementById('appContent').innerHTML = html; 
         }
 
-        // PERBAIKAN: copyShareLink juga menggunakan window.location.origin
         function copyShareLink() { 
             if(!schoolData.sheetId) return Swal.fire('Gagal', 'ID Database belum disetting', 'error'); 
             const baseUrl = window.location.origin + window.location.pathname;
@@ -556,7 +578,7 @@
         }
         
         function renderEditStudent(nis) { 
-            currentScreen = 'edit_student'; const s = students.find(x => String(x.nis) === String(nis)); if (!s) return; 
+            currentScreen = 'edit_student'; const s = students.find(x => String(x.nis).trim().toLowerCase() === String(nis).trim().toLowerCase()); if (!s) return; 
             const html = `<div class="pt-6 px-6 fade-in"><h2 class="text-xl font-bold mb-4">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><input name="name" value="${s.name}" required class="w-full p-3 rounded border"><input value="${s.nis}" disabled class="w-full p-3 rounded bg-gray-100 border text-gray-400"><input name="kelas" value="${s.kelas}" class="w-full p-3 rounded border"><input type="date" name="dob" value="${s.dob}" class="w-full p-3 rounded border"><button class="btn-3d btn-yellow w-full py-3 rounded font-bold">Update</button></form><button onclick="deleteStudent('${nis}')" class="w-full mt-4 py-3 text-red-500 font-bold border border-red-200 rounded">Hapus Siswa</button><button onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 text-gray-500">Batal</button></div>`; 
             document.getElementById('appContent').innerHTML = html; 
         }
@@ -564,7 +586,7 @@
         function handleUpdateStudent(e, oldNis) { 
             e.preventDefault(); const f = e.target;
             performAtomicSync(() => {
-                const idx = students.findIndex(s => String(s.nis) === String(oldNis)); 
+                const idx = students.findIndex(s => String(s.nis).trim().toLowerCase() === String(oldNis).trim().toLowerCase()); 
                 if (idx !== -1) { students[idx] = { ...students[idx], name: f.name.value, kelas: f.kelas.value, dob: f.dob.value }; }
             }, 'Data berhasil diperbarui', () => renderStudentDetail(oldNis));
         }
@@ -573,11 +595,11 @@
             Swal.fire({ title: 'Hapus Siswa?', text: "Semua riwayat poin siswa ini juga akan terhapus.", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(r => { 
                 if(r.isConfirmed) { 
                     performAtomicSync(() => { 
-                        deletedStudentNis.push(String(nis));
-                        students = students.filter(s => String(s.nis) !== String(nis)); 
-                        let logsToDel = logs.filter(l => String(l.studentId) === String(nis));
+                        deletedStudentNis.push(String(nis).trim().toLowerCase());
+                        students = students.filter(s => String(s.nis).trim().toLowerCase() !== String(nis).trim().toLowerCase()); 
+                        let logsToDel = logs.filter(l => String(l.studentId).trim().toLowerCase() === String(nis).trim().toLowerCase());
                         logsToDel.forEach(l => deletedLogIds.push(l.id));
-                        logs = logs.filter(l => String(l.studentId) !== String(nis)); 
+                        logs = logs.filter(l => String(l.studentId).trim().toLowerCase() !== String(nis).trim().toLowerCase()); 
                     }, 'Siswa berhasil dihapus', () => { if (currentScreen === 'edit_student' || currentScreen === 'teacher_detail') renderTeacherDashboard(); }); 
                 } 
             }); 
@@ -587,7 +609,7 @@
             Swal.fire({ title: 'Hapus SEMUA Siswa?', text: "Data ini tidak bisa dikembalikan!", icon: 'error', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Ya, Hapus Semua' }).then(r => { 
                 if(r.isConfirmed) { 
                     performAtomicSync(() => { 
-                        students.forEach(s => deletedStudentNis.push(String(s.nis)));
+                        students.forEach(s => deletedStudentNis.push(String(s.nis).trim().toLowerCase()));
                         logs.forEach(l => deletedLogIds.push(l.id));
                         students = []; logs = []; 
                     }, 'Semua data siswa berhasil dihapus', () => renderTeacherDashboard()); 
@@ -623,7 +645,7 @@
             const hr = ws.addRow(['No', 'NIS', 'Nama Lengkap Siswa', 'Kelas', 'Tanggal Lahir', 'Total Positif', 'Total Negatif', 'Poin Akhir']);
             hr.eachCell((c) => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } }; c.alignment = { horizontal: 'center', vertical: 'middle' }; c.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; });
             students.forEach((s, idx) => {
-                const sl = logs.filter(l => String(l.studentId) === String(s.nis)), pp = sl.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0), np = sl.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0), tp = pp + np;
+                const sl = logs.filter(l => String(l.studentId).trim().toLowerCase() === String(s.nis).trim().toLowerCase()), pp = sl.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0), np = sl.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0), tp = pp + np;
                 const r = ws.addRow([idx + 1, s.nis, s.name, s.kelas, s.dob ? new Date(s.dob).toLocaleDateString('id-ID') : "-", `+${pp}`, np, tp]);
                 r.eachCell((c, cn) => {
                     c.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; c.alignment = { vertical: 'middle' };
