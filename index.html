@@ -36,7 +36,7 @@
         .behavior-text { flex: 1; text-align: left; padding: 0 16px; font-weight: 700; font-size: 0.9rem; line-height: 1.3; color: #374151; }
         .point-badge { padding: 4px 12px; border-radius: 20px; font-weight: 800; font-size: 0.9rem; min-width: 45px; text-align: center; flex-shrink: 0; }
         
-        /* CSS Perbaikan Scroll Tab (Kini Mulus & Drag-able di Laptop) */
+        /* CSS Scroll Tab Mulus & Drag-able */
         .scroll-tabs { display: flex; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; gap: 4px; padding-bottom: 6px; }
         .scroll-tabs::-webkit-scrollbar { height: 5px; display: block; }
         .scroll-tabs::-webkit-scrollbar-track { background: transparent; }
@@ -121,7 +121,7 @@
             { id: 502, type: 'home_minus', label: 'Tidur Larut Malam', points: -5, icon: 'fa-bed' }
         ];
 
-        let schoolData, students, logs, behaviors, deletedLogIds, deletedStudentNis;
+        let schoolData, students, logs, behaviors, deletedLogIds, deletedStudentNis, deletedBehaviorIds;
         let currentScreen = 'splash', currentViewedNis = null, tempAddPhoto = "", isStudentModeOnly = false;
         let lastActionTime = 0, spamCounter = 0, debounceTimer, isSyncing = false, pendingSync = false;
         
@@ -149,9 +149,11 @@
             systemIDs.forEach(id => {
                 if (behaviors.findIndex(b => String(b.id) === String(id)) === -1) { 
                     const newB = initialBehaviors.find(b => String(b.id) === String(id)); 
-                    if(newB) behaviors.push({...newB}); 
+                    if(newB && !deletedBehaviorIds.includes(String(id))) behaviors.push({...newB}); 
                 }
             });
+            // Pembersihan perilaku yang mungkin terhapus namun muncul lagi
+            behaviors = behaviors.filter(b => !deletedBehaviorIds.includes(String(b.id)));
         }
 
         try {
@@ -165,8 +167,9 @@
             behaviors = JSON.parse(localStorage.getItem('behaviors')) || initialBehaviors;
             deletedLogIds = JSON.parse(localStorage.getItem('deletedLogIds')) || [];
             deletedStudentNis = (JSON.parse(localStorage.getItem('deletedStudentNis')) || []).map(n => String(n).trim().toLowerCase());
+            deletedBehaviorIds = (JSON.parse(localStorage.getItem('deletedBehaviorIds')) || []).map(n => String(n).trim());
             ensureSystemBehaviors();
-        } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; deletedLogIds = []; deletedStudentNis = []; }
+        } catch (e) { schoolData = defaultSchoolData; students = []; logs = []; behaviors = initialBehaviors; deletedLogIds = []; deletedStudentNis = []; deletedBehaviorIds = []; }
 
         function saveData(skipCloud = false) {
             schoolData.lastUpdate = Date.now();
@@ -176,6 +179,7 @@
             localStorage.setItem('behaviors', JSON.stringify(behaviors));
             localStorage.setItem('deletedLogIds', JSON.stringify(deletedLogIds));
             localStorage.setItem('deletedStudentNis', JSON.stringify(deletedStudentNis));
+            localStorage.setItem('deletedBehaviorIds', JSON.stringify(deletedBehaviorIds));
             if (!skipCloud && schoolData.sheetId && MASTER_API_URL.startsWith("http")) syncToCloud();
         }
 
@@ -216,7 +220,7 @@
             clearTimeout(debounceTimer); pendingSync = true; updateSyncUI('loading');
             
             const lightStudents = students.map(s => { const { photo, studentPhoto, teacherCoverPhoto, studentCoverPhoto, ...sisa } = s; return sisa; });
-            const payload = { sheetId: schoolData.sheetId, schoolData, students: lightStudents, logs, behaviors, deletedLogIds, deletedStudentNis };
+            const payload = { sheetId: schoolData.sheetId, schoolData, students: lightStudents, logs, behaviors, deletedLogIds, deletedStudentNis, deletedBehaviorIds };
             
             debounceTimer = setTimeout(() => {
                 fetch(MASTER_API_URL, {
@@ -249,6 +253,10 @@
                 let cloudDeleted = data.deletedLogIds || [];
                 deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
                 
+                if (data.deletedBehaviorIds) {
+                    deletedBehaviorIds = [...new Set([...deletedBehaviorIds, ...data.deletedBehaviorIds.map(n=>String(n).trim())])];
+                }
+                
                 let cloudStudents = data.students || [];
                 let activeCloudNis = cloudStudents.map(st => String(st.nis).trim().toLowerCase());
                 
@@ -269,7 +277,9 @@
                         return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
                     });
                 }
-                if(data.behaviors) behaviors = data.behaviors;
+                if(data.behaviors) {
+                    behaviors = data.behaviors.filter(b => !deletedBehaviorIds.includes(String(b.id)));
+                }
                 if(data.schoolData) {
                     schoolData = {...schoolData, ...data.schoolData};
                     schoolData.lastUpdate = cloudTime > localTime ? cloudTime : localTime;
@@ -298,6 +308,10 @@
                 let cloudDeleted = data.deletedLogIds || [];
                 deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
                 
+                if (data.deletedBehaviorIds) {
+                    deletedBehaviorIds = [...new Set([...deletedBehaviorIds, ...data.deletedBehaviorIds.map(n=>String(n).trim())])];
+                }
+                
                 let cloudStudents = data.students || [];
                 let activeCloudNis = cloudStudents.map(st => String(st.nis).trim().toLowerCase());
                 
@@ -318,7 +332,9 @@
                         return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
                     });
                 }
-                if(data.behaviors) behaviors = data.behaviors;
+                if(data.behaviors) {
+                    behaviors = data.behaviors.filter(b => !deletedBehaviorIds.includes(String(b.id)));
+                }
                 
                 actionCallback(); 
                 saveData(false); 
@@ -544,7 +560,7 @@
             Swal.fire({ title: 'Link Tersalin!', html: `Kirimkan link ini ke WhatsApp orang tua <b>${sn}</b>.`, icon: 'success' }); 
         }
 
-        // FUNGSI GANTI TAB TANPA REFRESH
+        // FUNGSI GANTI TAB TANPA REFRESH HALAMAN
         window.setTab = function(type, nis = null) { 
             ['good', 'bad', 'home_good', 'home_bad', 'salat', 'note'].forEach(t => { 
                 const el = document.getElementById('tab-' + t), btn = document.getElementById('btn-' + t); 
@@ -889,19 +905,19 @@
             const order = { 'plus': 1, 'home_plus': 2, 'minus': 3, 'home_minus': 4, 'neutral': 5 };
             const sorted = [...behaviors].sort((a, b) => order[a.type] - order[b.type]); 
             let list = sorted.map((b) => { 
-                const idx = behaviors.findIndex(x => x.id === b.id);
                 const isSys = (b.id >= 101 && b.id <= 106) || (b.id >= 201 && b.id <= 206) || (b.id >= 301 && b.id <= 306);
                 const badge = (b.type === 'home_plus' || b.type === 'home_minus') ? `<span class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded ml-2">Rumah</span>` : `<span class="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded ml-2">Sekolah</span>`;
                 const typeClass = (b.type === 'plus' || b.type === 'home_plus') ? 'item-good' : 'item-bad';
-                return `<div class="list-item-card ${typeClass} mb-2"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="flex flex-col"><span class="behavior-text pb-1">${b.label}</span><div>${badge}</div></div></div><div class="flex items-center gap-1"><span class="point-badge mr-1">${b.points}</span><button onclick="editBehavior(${idx})" class="text-blue-500 px-2"><i class="fas fa-edit"></i></button>${isSys ? `<span class="text-[8px] text-gray-400 italic">Sys</span>` : `<button onclick="delBehavior(${idx})" class="text-gray-400 hover:text-red-500 px-2"><i class="fas fa-trash"></i></button>`}</div></div>`; 
+                return `<div class="list-item-card ${typeClass} mb-2"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="flex flex-col"><span class="behavior-text pb-1">${b.label}</span><div>${badge}</div></div></div><div class="flex items-center gap-1"><span class="point-badge mr-1">${b.points}</span><button onclick="editBehavior('${b.id}')" class="text-blue-500 px-2"><i class="fas fa-edit"></i></button>${isSys ? `<span class="text-[8px] text-gray-400 italic">Sys</span>` : `<button onclick="delBehavior('${b.id}')" class="text-gray-400 hover:text-red-500 px-2"><i class="fas fa-trash"></i></button>`}</div></div>`; 
             }).join(''); 
             const html = `<div class="pt-6 px-6 pb-10 fade-in"><h2 class="text-xl font-bold mb-4">Daftar Poin</h2><div class="space-y-1 mb-4">${list}</div><button onclick="addNewBehaviorPrompt()" class="btn-3d btn-blue w-full py-3 rounded-lg">Tambah Baru</button></div>`; 
             document.getElementById('appContent').innerHTML = html; 
         }
 
-        // Penggunaan performAtomicSync untuk Memastikan Perubahan Poin Tersimpan Kuat
-        function editBehavior(idx) { 
-            const b = behaviors[idx]; 
+        // FUNGSI EDIT DAN DELETE DIPERBARUI BERDASARKAN ID (BUKAN INDEX)
+        function editBehavior(id) { 
+            const b = behaviors.find(x => String(x.id) === String(id)); 
+            if(!b) return;
             Swal.fire({ 
                 title: 'Edit Poin', 
                 html: `<input id="eL" class="swal2-input" value="${b.label}"><input id="eP" type="number" class="swal2-input" value="${Math.abs(b.points)}">`, 
@@ -914,8 +930,11 @@
             }).then((r) => { 
                 if(r.isConfirmed) { 
                     performAtomicSync(() => {
-                        behaviors[idx].label = r.value.label; 
-                        behaviors[idx].points = (b.type === 'minus' || b.type === 'home_minus') ? -Math.abs(r.value.points) : Math.abs(r.value.points); 
+                        let target = behaviors.find(x => String(x.id) === String(id));
+                        if(target) {
+                            target.label = r.value.label; 
+                            target.points = (target.type === 'minus' || target.type === 'home_minus') ? -Math.abs(r.value.points) : Math.abs(r.value.points); 
+                        }
                     }, 'Poin diperbarui!', () => renderManageBehaviors());
                 } 
             }); 
@@ -941,11 +960,12 @@
             }); 
         }
 
-        function delBehavior(idx) { 
+        function delBehavior(id) { 
             Swal.fire({ title: 'Hapus Poin?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(r => {
                 if(r.isConfirmed) {
                     performAtomicSync(() => {
-                        behaviors.splice(idx, 1);
+                        deletedBehaviorIds.push(String(id));
+                        behaviors = behaviors.filter(x => String(x.id) !== String(id));
                     }, 'Poin dihapus!', () => renderManageBehaviors());
                 }
             });
