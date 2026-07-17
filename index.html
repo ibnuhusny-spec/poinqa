@@ -960,16 +960,29 @@
             }); 
         }
 
-        function delBehavior(id) { 
-            Swal.fire({ title: 'Hapus Poin?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(r => {
-                if(r.isConfirmed) {
-                    performAtomicSync(() => {
-                        deletedBehaviorIds.push(String(id));
-                        behaviors = behaviors.filter(x => String(x.id) !== String(id));
-                    }, 'Poin dihapus!', () => renderManageBehaviors());
+        function deleteLog(id, nis, tab) { 
+    const targetId = String(id).trim();
+
+    Swal.fire({ 
+        title: 'Hapus Riwayat?', 
+        icon: 'warning', 
+        showCancelButton: true, 
+        confirmButtonColor: '#d33',
+        confirmButtonText: 'Ya, Hapus'
+    }).then((r) => { 
+        if (r.isConfirmed) { 
+            performAtomicSync(() => { 
+                if (!deletedLogIds.includes(targetId)) {
+                    deletedLogIds.push(targetId); 
                 }
+                logs = logs.filter(l => String(l.id).trim() !== targetId); 
+                saveData(true);
+            }, null, () => {
+                renderStudentDetail(nis, tab);
             });
-        }
+        } 
+    }); 
+}
 
         async function exportToExcel() { 
             if(students.length === 0) return Swal.fire('Info', 'Data siswa kosong', 'info'); 
