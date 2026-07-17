@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>POINKU PRO - Sistem Poin Siswa</title>
     
-    <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;900&display=swap" rel="stylesheet">
@@ -47,14 +46,26 @@
         .fade-in { animation: fadeIn 0.4s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
+    
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
       const supabaseUrl = 'https://gquohpkbygzkuybgblmp.supabase.co';
       const supabaseKey = 'sb_publishable_xcOviXGQvu-Ua3U3sRY_wg_AHlCMYMt'; 
       const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
-      if (window.self === window.top) {
-        _supabase.auth.getSession().then(({ data }) => { if (!data.session) window.location.replace("https://portal-terpadu.vercel.app/"); });
-      } else { console.log("Mode Pratinjau"); }
+      
+      // CEK APAKAH INI LINK MURID/ORANG TUA (Bypass Sistem Keamanan Portal)
+      const urlParams = new URLSearchParams(window.location.search);
+      const isStudentLink = urlParams.get('mode') === 'student' || urlParams.get('mode') === 'student_locked' || localStorage.getItem('lockedStudentNis');
+
+      if (window.self === window.top && !isStudentLink) {
+        _supabase.auth.getSession().then(({ data }) => {
+          if (!data.session) {
+            window.location.replace("https://portal-terpadu.vercel.app/");
+          }
+        });
+      } else {
+        console.log("Mode Murid / Pratinjau: Redirect portal dinonaktifkan agar bisa diakses Orang Tua.");
+      }
     </script>
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800">
@@ -178,9 +189,6 @@
             else { isSyncing = false; dot.className = "w-2 h-2 rounded-full bg-red-500"; txt.innerText = "Offline"; }
         }
 
-        // =========================================================================
-        // PENGIRIMAN & PENARIKAN DATA SUPER AMAN
-        // =========================================================================
         function syncToCloud() {
             if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) return; 
             clearTimeout(debounceTimer); pendingSync = true; updateSyncUI('loading');
@@ -207,7 +215,7 @@
             fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
                 if(data.error) throw new Error(data.error);
                 
-                // ANTI-DOWNGRADE (MENCEGAH DATA HILANG KARENA REFRESH CEPAT)
+                // ANTI-DOWNGRADE: Jika data di HP lebih baru, paksa push ke atas
                 const localTime = schoolData.lastUpdate || 0;
                 const cloudTime = (data.schoolData && data.schoolData.lastUpdate) ? data.schoolData.lastUpdate : 0;
                 
@@ -291,8 +299,7 @@
                 else { Swal.close(); if(uiCallback) uiCallback(); }
             });
         }
-        // =========================================================================
-
+        
         function refreshActiveUI() {
             if(currentScreen === 'teacher_dashboard') renderTeacherDashboard();
             if(currentScreen === 'manage_behaviors') renderManageBehaviors();
@@ -522,7 +529,10 @@
         function handleAddSubmit(e) { 
             e.preventDefault(); const f = e.target, nis = String(f.nis.value).trim(); 
             if(students.find(s => String(s.nis).trim() === nis)) return Swal.fire('Gagal', 'NIS sudah ada', 'error'); 
+            
+            // ANTI-GHOST: Hapus NIS ini dari daftar hitam memori HP saat guru sengaja mendaftarkannya kembali
             deletedStudentNis = deletedStudentNis.filter(n => String(n) !== nis);
+            
             students.push({ name: f.name.value, nis: nis, kelas: f.kelas.value, dob: f.dob.value, photo: tempAddPhoto, studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
             saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); 
         }
@@ -618,8 +628,11 @@
                     const row = jd[i]; if(row[0] && row[1]) {
                         const nis = String(row[1]).trim(); let dob = "";
                         if(row[3]) { if(!isNaN(row[3]) && typeof row[3] === 'number') { let d = new Date((row[3] - 25569) * 86400000); dob = d.toISOString().split('T')[0]; } else { dob = String(row[3]).trim(); } }
+                        
+                        // ANTI-GHOST EXCEL: Hapus dari daftar hitam lokal saat di-import
+                        deletedStudentNis = deletedStudentNis.filter(n => String(n) !== nis);
+                        
                         if(!students.find(s => String(s.nis) === nis)) {
-                            deletedStudentNis = deletedStudentNis.filter(n => String(n) !== nis);
                             students.push({ name: row[0], nis: nis, kelas: row[2] || "-", dob: dob, photo: "", studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
                         }
                     }
@@ -632,10 +645,6 @@
             const wb = XLSX.utils.book_new(), wsD = [["Nama Lengkap", "NIS", "Kelas", "Tanggal Lahir (YYYY-MM-DD)"], ["Budi Santoso", "1001", "1A", "2015-05-20"], ["Siti Aminah", "1002", "1A", "2016-08-15"]], ws = XLSX.utils.aoa_to_sheet(wsD);
             ws['!cols'] = [{wch: 30}, {wch: 15}, {wch: 10}, {wch: 30}]; XLSX.utils.book_append_sheet(wb, ws, "Template"); XLSX.writeFile(wb, "Template_PoinkuPro.xlsx");
         }
-
-        function downloadBackup() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({schoolData, students, logs, behaviors, deletedLogIds, deletedStudentNis})); a.download = "Backup_Poin.json"; a.click(); }
-        function triggerRestore() { document.getElementById('restoreInput').click(); }
-        function handleRestore(e) { const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); students = d.students; logs = d.logs; behaviors = d.behaviors; schoolData = d.schoolData; deletedLogIds = d.deletedLogIds || []; deletedStudentNis = d.deletedStudentNis || []; saveData(true); location.reload(); } catch(err) { Swal.fire('Error', 'File rusak.', 'error'); } }; r.readAsText(e.target.files[0]); }
 
         window.onload = function() { checkAutoConfig(); let ln = localStorage.getItem('lockedStudentNis'); if (ln) handleAutoLogin(ln); else { renderSplash(); if(schoolData.sheetId && MASTER_API_URL.startsWith("http")) setTimeout(() => loadFromCloud(false), 500); } };
     </script>
