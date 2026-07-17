@@ -194,42 +194,27 @@
         // =========================================================================
         // PENGIRIMAN KE MASTER API URL (DILENGKAPI DAFTAR HITAM SISWA)
         // =========================================================================
-        // Ganti fungsi syncToCloud Anda dengan ini:
-function syncToCloud() {
-    if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) return; 
-    clearTimeout(debounceTimer); 
-    pendingSync = true; 
-    updateSyncUI('loading');
-
-    // MENGIRIM SELURUH DATA SISWA YANG ADA DI HP SAAT INI
-    const payload = { 
-        sheetId: schoolData.sheetId, 
-        schoolData: schoolData, 
-        students: students, // Mengirim SEMUA siswa, bukan per orang
-        logs: logs, 
-        behaviors: behaviors, 
-        deletedLogIds: deletedLogIds, 
-        deletedStudentNis: deletedStudentNis 
-    };
-    
-    debounceTimer = setTimeout(() => {
-        fetch(MASTER_API_URL, {
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ data: JSON.stringify(payload) }), 
-            mode: 'no-cors', 
-            keepalive: true 
-        }).then(() => updateSyncUI('success')).catch(() => {
-            const form = document.getElementById('syncForm'), input = document.getElementById('syncDataInput');
-            if(form && input) { 
-                form.action = MASTER_API_URL; 
-                input.value = JSON.stringify(payload); 
-                form.submit(); 
-                setTimeout(() => updateSyncUI('success'), 1000); 
-            }
-        });
-    }, 300);
-}
+        function syncToCloud() {
+            if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) return; 
+            clearTimeout(debounceTimer); pendingSync = true; updateSyncUI('loading');
+            
+            // ANTI-GHOST: Hapus paksa NIS aktif dari daftar hitam sebelum dikirim
+            let activeNis = students.map(s => String(s.nis));
+            deletedStudentNis = deletedStudentNis.filter(n => !activeNis.includes(n));
+            
+            const lightStudents = students.map(s => { const { photo, studentPhoto, teacherCoverPhoto, studentCoverPhoto, ...sisa } = s; return sisa; });
+            const payload = { sheetId: schoolData.sheetId, schoolData, students: lightStudents, logs, behaviors, deletedLogIds, deletedStudentNis };
+            
+            debounceTimer = setTimeout(() => {
+                fetch(MASTER_API_URL, {
+                    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ data: JSON.stringify(payload) }), mode: 'no-cors', keepalive: true 
+                }).then(() => updateSyncUI('success')).catch(() => {
+                    const form = document.getElementById('syncForm'), input = document.getElementById('syncDataInput');
+                    if(form && input) { form.action = MASTER_API_URL; input.value = JSON.stringify(payload); form.submit(); setTimeout(() => updateSyncUI('success'), 1000); }
+                });
+            }, 300);
+        }
 
         function performAtomicSync(actionCallback, successMsg, uiCallback) {
             if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) {
@@ -242,10 +227,13 @@ function syncToCloud() {
             fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
                 if(data.error) throw new Error(data.error);
                 
-                // Sinkronisasi Daftar Hitam
+                // Sinkronisasi Daftar Hitam - ANTI GHOST
+                let incomingActiveNis = (data.students || []).map(s => String(s.nis));
                 let cloudDeleted = data.deletedLogIds || [];
                 deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
-                let cloudDeletedStudents = data.deletedStudentNis || [];
+                
+                let cloudDeletedStudents = (data.deletedStudentNis || []).filter(n => !incomingActiveNis.includes(n));
+                deletedStudentNis = deletedStudentNis.filter(n => !incomingActiveNis.includes(n));
                 deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
 
                 let logMap = new Map();
@@ -283,10 +271,13 @@ function syncToCloud() {
             fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
                 if(data.error) throw new Error(data.error);
                 
-                // Sinkronisasi Daftar Hitam
+                // Sinkronisasi Daftar Hitam - ANTI GHOST
+                let incomingActiveNis = (data.students || []).map(s => String(s.nis));
                 let cloudDeleted = data.deletedLogIds || [];
                 deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
-                let cloudDeletedStudents = data.deletedStudentNis || [];
+                
+                let cloudDeletedStudents = (data.deletedStudentNis || []).filter(n => !incomingActiveNis.includes(n));
+                deletedStudentNis = deletedStudentNis.filter(n => !incomingActiveNis.includes(n));
                 deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
 
                 let logMap = new Map();
@@ -563,7 +554,19 @@ function syncToCloud() {
         }
 
         window.previewAddPhoto = async function(e) { const f = e.target.files[0]; if(f) { Swal.fire({title: 'Memproses...', didOpen: () => Swal.showLoading()}); tempAddPhoto = await compressImage(f, false); document.getElementById('addPhotoPreview').src = tempAddPhoto; document.getElementById('addPhotoPreview').classList.remove('hidden'); document.getElementById('addPhotoPlaceholder').classList.add('hidden'); Swal.close(); } }
-        function handleAddSubmit(e) { e.preventDefault(); const f = e.target, nis = String(f.nis.value).trim(); if(students.find(s => String(s.nis).trim() === nis)) return Swal.fire('Gagal', 'NIS sudah ada', 'error'); students.push({ name: f.name.value, nis: nis, kelas: f.kelas.value, dob: f.dob.value, photo: tempAddPhoto, studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); saveData(); Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); }
+
+        function handleAddSubmit(e) { 
+            e.preventDefault(); 
+            const f = e.target, nis = String(f.nis.value).trim(); 
+            if(students.find(s => String(s.nis).trim() === nis)) return Swal.fire('Gagal', 'NIS sudah ada', 'error'); 
+            
+            // Hapus paksa dari daftar hitam jika ditambahkan ulang
+            deletedStudentNis = deletedStudentNis.filter(n => String(n) !== nis);
+            
+            students.push({ name: f.name.value, nis: nis, kelas: f.kelas.value, dob: f.dob.value, photo: tempAddPhoto, studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
+            saveData(); 
+            Swal.fire('Sukses', '', 'success').then(() => renderTeacherDashboard()); 
+        }
         
         function renderEditStudent(nis) { 
             currentScreen = 'edit_student'; const s = students.find(x => String(x.nis) === String(nis)); if (!s) return; 
@@ -693,7 +696,12 @@ function syncToCloud() {
                     const row = jd[i]; if(row[0] && row[1]) {
                         const nis = String(row[1]).trim(); let dob = "";
                         if(row[3]) { if(!isNaN(row[3]) && typeof row[3] === 'number') { let d = new Date((row[3] - 25569) * 86400000); dob = d.toISOString().split('T')[0]; } else { dob = String(row[3]).trim(); } }
-                        if(!students.find(s => String(s.nis) === nis)) students.push({ name: row[0], nis: nis, kelas: row[2] || "-", dob: dob, photo: "", studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
+                        if(!students.find(s => String(s.nis) === nis)) {
+                            // Hapus paksa dari daftar hitam jika ada di Excel
+                            deletedStudentNis = deletedStudentNis.filter(n => String(n) !== nis);
+                            
+                            students.push({ name: row[0], nis: nis, kelas: row[2] || "-", dob: dob, photo: "", studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
+                        }
                     }
                 }
                 saveData(); Swal.fire('Sukses', 'Data diimpor.', 'success').then(() => renderTeacherDashboard());
