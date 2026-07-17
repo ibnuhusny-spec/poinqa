@@ -46,7 +46,6 @@
         .fade-in { animation: fadeIn 0.4s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
-    <!-- Supabase telah dihapus di versi ini agar berjalan 100% independen -->
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800">
     <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
@@ -343,7 +342,17 @@
             document.getElementById('appContent').innerHTML = html;
         }
 
-        window.copyPersonalLink = function(nis) { if(!schoolData.sheetId) return Swal.fire('Gagal', 'ID Database belum diatur', 'error'); const bu = window.location.href.split('?')[0], sn = students.find(s=>String(s.nis)===String(nis)).name, fl = `${bu}?sid=${encodeURIComponent(schoolData.sheetId)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&city=${encodeURIComponent(schoolData.city)}&mode=student_locked&nis=${encodeURIComponent(nis)}`; const el = document.createElement('textarea'); el.value = fl; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); Swal.fire({ title: 'Link Tersalin!', html: `Kirimkan link ini ke WhatsApp orang tua <b>${sn}</b>.`, icon: 'success' }); }
+        // PERBAIKAN 1: Pengambilan base url untuk copy link orang tua 
+        // Menggunakan window.location.origin + pathname agar bebas gangguan hashtag #
+        window.copyPersonalLink = function(nis) { 
+            if(!schoolData.sheetId) return Swal.fire('Gagal', 'ID Database belum diatur', 'error'); 
+            const baseUrl = window.location.origin + window.location.pathname;
+            const sn = students.find(s=>String(s.nis)===String(nis)).name;
+            const fl = `${baseUrl}?sid=${encodeURIComponent(schoolData.sheetId)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&city=${encodeURIComponent(schoolData.city)}&mode=student_locked&nis=${encodeURIComponent(nis)}`; 
+            const el = document.createElement('textarea'); el.value = fl; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); 
+            Swal.fire({ title: 'Link Tersalin!', html: `Kirimkan link ini ke WhatsApp orang tua <b>${sn}</b>.`, icon: 'success' }); 
+        }
+
         window.setTab = function(type, nis = null) { if(currentScreen === 'teacher_detail' && nis) renderStudentDetail(nis, type); else { ['good', 'bad', 'salat', 'note'].forEach(t => { const el = document.getElementById('tab-' + t), btn = document.getElementById('btn-' + t); if(el) { el.classList.toggle('hidden', t !== type); btn.className = t === type ? `tab-btn tab-active-${t}` : "tab-btn tab-inactive"; } }); } }
         
         function deleteLog(id, nis, tab) { 
@@ -396,6 +405,7 @@
         
         function handleLoginManual() { const nis = document.getElementById('loginNis').value.trim(); if(!nis) return Swal.fire('Tunggu', 'Masukkan NIS!', 'warning'); handleAutoLogin(nis); }
         
+        // PERBAIKAN 2: Proteksi agar lockedStudentNis tidak terhapus begitu saja jika masalah koneksi.
         window.handleAutoLogin = function(nis) { 
             const cleanNis = String(nis).trim().toLowerCase();
             const s = students.find(x => String(x.nis).trim().toLowerCase() === cleanNis); 
@@ -410,16 +420,36 @@
                         if(data.error) throw new Error(data.error);
                         let cloudDeletedStudents = data.deletedStudentNis || [];
                         deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents])];
-                        if(data.students) { students = data.students.filter(st => !deletedStudentNis.includes(String(st.nis))); }
+                        
+                        // Perbaikan merger data profil agar foto yg belum tersync lokal tidak hilang
+                        if(data.students) { 
+                            let validCloudStudents = data.students.filter(st => !deletedStudentNis.includes(String(st.nis)));
+                            students = validCloudStudents.map(cloudS => {
+                                const localS = students.find(l => String(l.nis) === String(cloudS.nis));
+                                return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
+                            });
+                        }
                         if(data.logs) logs = data.logs; 
                         if(data.behaviors) behaviors = data.behaviors; 
                         saveData(true); 
+                        
                         const f = students.find(x => String(x.nis).trim().toLowerCase() === cleanNis); 
-                        if(f) { Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(() => renderStudentDashboard(f)); } 
-                        else { Swal.fire('Gagal', 'NIS tidak ditemukan di Database. Mungkin guru belum selesai sinkronisasi. Silakan coba lagi nanti.', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); } 
-                    }).catch(err => { Swal.fire('Error', err.message || 'Koneksi Gagal', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); }); 
+                        if(f) { 
+                            Swal.fire({title:'Berhasil', icon:'success', timer:1000, showConfirmButton:false}).then(() => renderStudentDashboard(f)); 
+                        } else { 
+                            Swal.fire('Gagal', 'NIS tidak ditemukan di Database. Pastikan guru sudah selesai sinkronisasi.', 'error'); 
+                            localStorage.removeItem('lockedStudentNis'); 
+                            renderSplash(); 
+                        } 
+                    }).catch(err => { 
+                        Swal.fire('Error', err.message || 'Koneksi Gagal', 'error'); 
+                        // Jangan hapus lockedStudentNis kalau cuma error jaringan sesaat
+                        renderSplash(); 
+                    }); 
                 } else { 
-                    Swal.fire('Gagal', 'NIS tidak ditemukan atau ID Database belum diatur.', 'error'); localStorage.removeItem('lockedStudentNis'); renderSplash(); 
+                    Swal.fire('Akses Ditolak', 'Database ID tidak ada. Silakan gunakan tautan terbaru yang diberikan oleh guru Anda.', 'error'); 
+                    localStorage.removeItem('lockedStudentNis'); 
+                    renderSplash(); 
                 } 
             } 
         }
@@ -470,7 +500,14 @@
             document.getElementById('appContent').innerHTML = html; 
         }
 
-        function copyShareLink() { if(!schoolData.sheetId) return Swal.fire('Gagal', 'ID Database belum disetting', 'error'); const bu = window.location.href.split('?')[0], fl = `${bu}?sid=${encodeURIComponent(schoolData.sheetId)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&city=${encodeURIComponent(schoolData.city)}&mode=student`; const el = document.createElement('textarea'); el.value = fl; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); Swal.fire({ title: 'Link Umum Tersalin!', icon: 'success' }); }
+        // PERBAIKAN: copyShareLink juga menggunakan window.location.origin
+        function copyShareLink() { 
+            if(!schoolData.sheetId) return Swal.fire('Gagal', 'ID Database belum disetting', 'error'); 
+            const baseUrl = window.location.origin + window.location.pathname;
+            const fl = `${baseUrl}?sid=${encodeURIComponent(schoolData.sheetId)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&city=${encodeURIComponent(schoolData.city)}&mode=student`; 
+            const el = document.createElement('textarea'); el.value = fl; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); 
+            Swal.fire({ title: 'Link Umum Tersalin!', icon: 'success' }); 
+        }
         
         window.previewSchoolLogo = async function(e) { const f = e.target.files[0]; if(f) { Swal.fire({title: 'Memproses Logo...', didOpen: () => Swal.showLoading()}); const b64 = await compressImage(f, false); schoolData.logo = b64; saveData(true); Swal.close(); renderSetup(); } }
 
