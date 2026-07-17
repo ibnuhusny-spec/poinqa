@@ -313,8 +313,18 @@
                     const img = new Image(); img.src = event.target.result; 
                     img.onload = () => { 
                         const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
-                        if(isCover) { const tw = 600; const sc = tw / img.width; canvas.width = tw; canvas.height = img.height * sc; ctx.drawImage(img, 0, 0, canvas.width, canvas.height); } 
-                        else { canvas.width = 300; canvas.height = 300; const md = Math.min(img.width, img.height); const sx = (img.width - md) / 2, sy = (img.height - md) / 2; ctx.drawImage(img, sx, sy, md, md, 0, 0, 300, 300); }
+                        if(isCover) { 
+                            const tw = 600; const sc = tw / img.width; 
+                            canvas.width = tw; canvas.height = img.height * sc; 
+                            ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); // Cat putih
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height); 
+                        } 
+                        else { 
+                            canvas.width = 300; canvas.height = 300; 
+                            ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); // Cat putih
+                            const md = Math.min(img.width, img.height); const sx = (img.width - md) / 2, sy = (img.height - md) / 2; 
+                            ctx.drawImage(img, sx, sy, md, md, 0, 0, 300, 300); 
+                        }
                         resolve(canvas.toDataURL('image/jpeg', 0.6)); 
                     }; 
                 }; 
