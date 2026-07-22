@@ -1011,6 +1011,79 @@
             ws['!cols'] = [{wch: 30}, {wch: 15}, {wch: 10}, {wch: 30}]; XLSX.utils.book_append_sheet(wb, ws, "Template"); XLSX.writeFile(wb, "Template_PoinkuPro.xlsx");
         }
 
+        // ==========================================
+        // FUNGSI-FUNGSI UNTUK MENU PENGATURAN (SETUP)
+        // ==========================================
+
+        window.checkConnectionAndSave = function(input) {
+            let sheetId = input.trim();
+            
+            // Ekstrak ID jika user memasukkan link panjang Google Sheet
+            const match = input.match(/\/d\/(.*?)(\/|$)/);
+            if (match && match[1]) {
+                sheetId = match[1];
+            }
+            
+            if(!sheetId) return Swal.fire('Error', 'Link atau ID Sheet tidak valid!', 'error');
+            
+            schoolData.sheetId = sheetId;
+            saveData(true);
+            Swal.fire('Tersimpan', 'Database Google Sheet berhasil disambungkan.', 'success');
+        }
+
+        window.copyShareLink = function() {
+            if(!schoolData.sheetId) return Swal.fire('Gagal', 'ID Database belum diatur di pengaturan.', 'error');
+            
+            const baseUrl = window.location.origin + window.location.pathname;
+            const fl = `${baseUrl}?sid=${encodeURIComponent(schoolData.sheetId)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&city=${encodeURIComponent(schoolData.city)}&mode=student`; 
+            
+            const el = document.createElement('textarea'); 
+            el.value = fl; 
+            document.body.appendChild(el); 
+            el.select(); 
+            document.execCommand('copy'); 
+            document.body.removeChild(el); 
+            
+            Swal.fire({ title: 'Link Tersalin!', text: 'Kirimkan link akses publik ini ke grup kelas.', icon: 'success' });
+        }
+
+        window.previewSchoolLogo = async function(e) {
+            const f = e.target.files[0]; 
+            if(f) { 
+                Swal.fire({title: 'Memproses Foto...', didOpen: () => Swal.showLoading()}); 
+                const b64 = await compressImage(f, false); 
+                schoolData.logo = b64; 
+                saveData(true); 
+                Swal.close(); 
+                renderSetup(); // Render ulang untuk menampilkan logo baru
+            }
+        }
+
+        window.saveSettings = function() {
+            schoolData.name = document.getElementById('sName').value.trim();
+            schoolData.location = document.getElementById('sLoc').value.trim();
+            schoolData.city = document.getElementById('sCity').value.trim(); // Akan tersimpan sebagai Kabupaten Maros atau lainnya
+            schoolData.teacherPassword = document.getElementById('tPass').value.trim();
+            
+            saveData(true);
+            Swal.fire('Tersimpan', 'Profil sekolah dan password berhasil diperbarui.', 'success');
+        }
+
+        window.resetAll = function() {
+            Swal.fire({
+                title: 'Reset Semua Data?',
+                text: "Semua data lokal (Siswa, Riwayat Poin, Setting) akan dihapus secara permanen dari perangkat ini. Lanjutkan?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Ya, Reset Total'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    localStorage.clear();
+                    location.reload();
+                }
+            });
+        }
         window.onload = function() { checkAutoConfig(); let ln = localStorage.getItem('lockedStudentNis'); if (ln) handleAutoLogin(ln); else { renderSplash(); if(schoolData.sheetId && MASTER_API_URL.startsWith("http")) setTimeout(() => loadFromCloud(false), 500); } };
     </script>
 </body>
