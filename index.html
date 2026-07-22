@@ -26,11 +26,6 @@
         .btn-purple { background-color: #8b5cf6 !important; border-color: #6d28d9 !important; } 
         .list-item-card { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; margin-bottom: 10px; width: 100%; background-color: white; border: 1px solid; border-bottom-width: 4px; border-radius: 12px; transition: all 0.1s; cursor: pointer; }
         .list-item-card:active { transform: translateY(3px); border-bottom-width: 1px; margin-bottom: 13px; }
-        div.list-item-card:active { 
-            transform: translateY(0) !important; 
-            border-bottom-width: 4px !important; 
-            margin-bottom: 10px !important; 
-        }
         .item-good { border-color: #22c55e; color: #14532d; }
         .item-good .icon-box { background-color: #dcfce7; color: #166534; }
         .item-good .point-badge { background-color: #22c55e; color: white; }
@@ -41,7 +36,6 @@
         .behavior-text { flex: 1; text-align: left; padding: 0 16px; font-weight: 700; font-size: 0.9rem; line-height: 1.3; color: #374151; }
         .point-badge { padding: 4px 12px; border-radius: 20px; font-weight: 800; font-size: 0.9rem; min-width: 45px; text-align: center; flex-shrink: 0; }
         
-        /* CSS Scroll Tab Mulus & Drag-able */
         .scroll-tabs { display: flex; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; gap: 4px; padding-bottom: 6px; }
         .scroll-tabs::-webkit-scrollbar { height: 5px; display: block; }
         .scroll-tabs::-webkit-scrollbar-track { background: transparent; }
@@ -130,7 +124,7 @@
         let currentScreen = 'splash', currentViewedNis = null, tempAddPhoto = "", isStudentModeOnly = false;
         let lastActionTime = 0, spamCounter = 0, debounceTimer, isSyncing = false, pendingSync = false;
         
-        let lastTabScrollPosition = 0;
+        let lastTabScrollPosition = 0; 
 
         function isSpamDetected() {
             const now = Date.now();
@@ -190,14 +184,32 @@
         function checkAutoConfig() {
             const params = new URLSearchParams(window.location.search);
             const sheetIdParam = params.get('sid'), sName = params.get('school'), sLoc = params.get('loc'), sCity = params.get('city'), mode = params.get('mode'), lockNis = params.get('nis');
+            
+            // --- DETEKSI PINDAH KELAS / DATABASE ---
+            if (sheetIdParam && schoolData.sheetId && sheetIdParam !== schoolData.sheetId) {
+                students = []; 
+                logs = []; 
+                deletedLogIds = []; 
+                deletedStudentNis = []; 
+                deletedBehaviorIds = [];
+                behaviors = initialBehaviors; 
+                localStorage.removeItem('lockedStudentNis'); 
+            }
+            // ----------------------------------------
+
             if (mode === 'student_locked' && lockNis) { localStorage.setItem('lockedStudentNis', lockNis); isStudentModeOnly = true; } 
             else if (mode === 'student') { isStudentModeOnly = true; }
+            
             let isUpd = false;
             if (sheetIdParam && sheetIdParam !== schoolData.sheetId) { schoolData.sheetId = sheetIdParam; isUpd = true; }
             if (sName && sName !== schoolData.name) { schoolData.name = decodeURIComponent(sName); isUpd = true; }
             if (sLoc && sLoc !== schoolData.location) { schoolData.location = decodeURIComponent(sLoc); isUpd = true; }
             if (sCity && sCity !== schoolData.city) { schoolData.city = decodeURIComponent(sCity); isUpd = true; }
-            if (isUpd || mode) { if (isUpd) saveData(true); window.history.replaceState({}, document.title, window.location.pathname); }
+            
+            if (isUpd || mode) { 
+                if (isUpd) saveData(true); 
+                window.history.replaceState({}, document.title, window.location.pathname); 
+            }
         }
 
         function goHome() { if(currentScreen !== 'splash') { if (localStorage.getItem('lockedStudentNis')) handleAutoLogin(localStorage.getItem('lockedStudentNis')); else if (isStudentModeOnly) renderStudentLogin(); else renderModeSelection(); } }
@@ -381,7 +393,7 @@
                     if (!isDown) return;
                     e.preventDefault();
                     const x = e.pageX - slider.offsetLeft;
-                    const walk = (x - startX) * 2;
+                    const walk = (x - startX) * 2; 
                     slider.scrollLeft = scrollLeft - walk;
                 });
             });
@@ -576,25 +588,9 @@
         }
         
         function deleteLog(id, nis, tab) { 
-            const targetId = String(id).trim();
-
-            Swal.fire({ 
-                title: 'Hapus Riwayat?', 
-                icon: 'warning', 
-                showCancelButton: true, 
-                confirmButtonColor: '#d33',
-                confirmButtonText: 'Ya, Hapus'
-            }).then((r) => { 
+            Swal.fire({ title: 'Hapus?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((r) => { 
                 if (r.isConfirmed) { 
-                    performAtomicSync(() => { 
-                        if (!deletedLogIds.includes(targetId)) {
-                            deletedLogIds.push(targetId); 
-                        }
-                        logs = logs.filter(l => String(l.id).trim() !== targetId); 
-                        saveData(true);
-                    }, null, () => {
-                        renderStudentDetail(nis, tab);
-                    });
+                    performAtomicSync(() => { deletedLogIds.push(id); logs = logs.filter(l => String(l.id) !== String(id)); }, null, () => renderStudentDetail(nis, tab));
                 } 
             }); 
         }
@@ -857,22 +853,7 @@
             }).catch(e => { Swal.fire('Error', 'Gagal menghubungi Server Master. Cek koneksi Anda.', 'error'); });
         }
 
-        function saveSettings() { 
-    const newPass = document.getElementById('tPass').value.trim();
-    
-    // Cegah user mengosongkan password
-    if (!newPass) {
-        return Swal.fire('Gagal', 'Password Guru tidak boleh kosong!', 'warning');
-    }
-
-    schoolData.name = document.getElementById('sName').value; 
-    schoolData.location = document.getElementById('sLoc').value; 
-    schoolData.city = document.getElementById('sCity').value; 
-    schoolData.teacherPassword = newPass; 
-    
-    saveData(true); 
-    Swal.fire('Tersimpan', 'Profil dan Password berhasil diupdate.', 'success'); 
-}
+        function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; schoolData.city = document.getElementById('sCity').value; schoolData.teacherPassword = document.getElementById('tPass').value; saveData(true); Swal.fire('Tersimpan', '', 'success'); }
         function resetAll() { Swal.fire({ title: 'Reset Semua?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((r) => { if (r.isConfirmed) { localStorage.clear(); location.href = window.location.pathname; } }); }
 
         function renderAddStudent() { 
@@ -949,9 +930,8 @@
         }
 
         // FUNGSI EDIT DAN DELETE DIPERBARUI BERDASARKAN ID (BUKAN INDEX)
-        window.editBehavior = function(id) { 
-            const targetId = String(id).trim();
-            const b = behaviors.find(x => String(x.id).trim() === targetId); 
+        function editBehavior(id) { 
+            const b = behaviors.find(x => String(x.id) === String(id)); 
             if(!b) return;
             Swal.fire({ 
                 title: 'Edit Poin', 
@@ -965,7 +945,7 @@
             }).then((r) => { 
                 if(r.isConfirmed) { 
                     performAtomicSync(() => {
-                        let target = behaviors.find(x => String(x.id).trim() === targetId);
+                        let target = behaviors.find(x => String(x.id) === String(id));
                         if(target) {
                             target.label = r.value.label; 
                             target.points = (target.type === 'minus' || target.type === 'home_minus') ? -Math.abs(r.value.points) : Math.abs(r.value.points); 
@@ -973,30 +953,6 @@
                     }, 'Poin diperbarui!', () => renderManageBehaviors());
                 } 
             }); 
-        }
-
-        window.delBehavior = function(id) { 
-            const targetId = String(id).trim();
-
-            Swal.fire({ 
-                title: 'Hapus Poin?', 
-                icon: 'warning', 
-                showCancelButton: true, 
-                confirmButtonColor: '#d33',
-                confirmButtonText: 'Ya, Hapus'
-            }).then(r => {
-                if(r.isConfirmed) {
-                    performAtomicSync(() => {
-                        if (!deletedBehaviorIds.includes(targetId)) {
-                            deletedBehaviorIds.push(targetId);
-                        }
-                        behaviors = behaviors.filter(x => String(x.id).trim() !== targetId);
-                        saveData(true); 
-                    }, 'Poin dihapus!', () => {
-                        renderManageBehaviors();
-                    });
-                }
-            });
         }
 
         function addNewBehaviorPrompt() { 
@@ -1017,6 +973,17 @@
                     }, 'Poin ditambahkan!', () => renderManageBehaviors());
                 }
             }); 
+        }
+
+        function delBehavior(id) { 
+            Swal.fire({ title: 'Hapus Poin?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(r => {
+                if(r.isConfirmed) {
+                    performAtomicSync(() => {
+                        deletedBehaviorIds.push(String(id));
+                        behaviors = behaviors.filter(x => String(x.id) !== String(id));
+                    }, 'Poin dihapus!', () => renderManageBehaviors());
+                }
+            });
         }
 
         async function exportToExcel() { 
