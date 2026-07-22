@@ -247,18 +247,14 @@
             }, 300);
         }
 
-        // ================= PENYEMPURNAAN ATOMIC SYNC MERGE =================
         function processCloudMerge(data) {
-            // Merge Deleted Logs
             let cloudDeleted = data.deletedLogIds || [];
             deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
             
-            // Merge Deleted Behaviors
             if (data.deletedBehaviorIds) {
                 deletedBehaviorIds = [...new Set([...deletedBehaviorIds, ...data.deletedBehaviorIds.map(n=>String(n).trim())])];
             }
             
-            // Merge Deleted Students
             let cloudStudents = data.students || [];
             let activeCloudNis = cloudStudents.map(st => String(st.nis).trim().toLowerCase());
             let cloudDeletedStudents = data.deletedStudentNis || [];
@@ -266,32 +262,28 @@
             deletedStudentNis = deletedStudentNis.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
             deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents.map(n=>String(n).trim().toLowerCase())])];
 
-            // Merge Logs
             if(data.logs) {
                 let logMap = new Map();
                 data.logs.forEach(l => logMap.set(l.id, l));
-                logs.forEach(l => logMap.set(l.id, l)); // Local menimpa/mempertahankan jika ada penambahan instan
+                logs.forEach(l => logMap.set(l.id, l)); 
                 logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
             }
 
-            // Merge Students
             if(data.students) {
                 let sMap = new Map();
-                students.forEach(s => sMap.set(String(s.nis).trim().toLowerCase(), s)); // Local master
+                students.forEach(s => sMap.set(String(s.nis).trim().toLowerCase(), s)); 
                 data.students.forEach(cloudS => {
                     const nisKey = String(cloudS.nis).trim().toLowerCase();
                     const localS = sMap.get(nisKey);
-                    // Cloud menimpa, tapi menjaga foto/cover lokal jika cloud tidak punya
                     sMap.set(nisKey, { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" });
                 });
                 students = Array.from(sMap.values()).filter(s => !deletedStudentNis.includes(String(s.nis).trim().toLowerCase()));
             }
 
-            // Merge Behaviors (Mencegah Custom Poin hilang)
             if(data.behaviors) {
                 let bMap = new Map();
-                behaviors.forEach(b => bMap.set(String(b.id), b)); // Pertahankan Local Custom Behaviors
-                data.behaviors.forEach(b => bMap.set(String(b.id), b)); // Timpa dengan Cloud jika ada update Label/Point
+                behaviors.forEach(b => bMap.set(String(b.id), b)); 
+                data.behaviors.forEach(b => bMap.set(String(b.id), b)); 
                 behaviors = Array.from(bMap.values()).filter(b => !deletedBehaviorIds.includes(String(b.id)));
             }
         }
@@ -354,7 +346,6 @@
                 else { Swal.close(); if(uiCallback) uiCallback(); }
             });
         }
-        // =========================================================================
         
         function refreshActiveUI() {
             if(currentScreen === 'teacher_dashboard') renderTeacherDashboard();
@@ -567,7 +558,6 @@
             Swal.fire({ title: 'Link Tersalin!', html: `Kirimkan link ini ke WhatsApp orang tua <b>${sn}</b>.`, icon: 'success' }); 
         }
 
-        // FUNGSI GANTI TAB TANPA REFRESH HALAMAN
         window.setTab = function(type, nis = null) { 
             ['good', 'bad', 'home_good', 'home_bad', 'salat', 'note'].forEach(t => { 
                 const el = document.getElementById('tab-' + t), btn = document.getElementById('btn-' + t); 
@@ -783,113 +773,7 @@
 
         window.updateImage = function(nis, type) { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.onchange = async (e) => { const f = e.target.files[0]; if(f) { Swal.fire({title: 'Memproses...', didOpen: () => Swal.showLoading()}); const ic = type.includes('Cover'); const b64 = await compressImage(f, ic); const idx = students.findIndex(s => String(s.nis).trim().toLowerCase() === String(nis).trim().toLowerCase()); if(idx !== -1) { if(type === 'teacherCover') students[idx].teacherCoverPhoto = b64; else if(type === 'teacherProfile') students[idx].photo = b64; else if(type === 'studentCover') students[idx].studentCoverPhoto = b64; else if(type === 'studentProfile') students[idx].studentPhoto = b64; saveData(); Swal.close(); if(type.includes('teacher')) renderStudentDetail(nis); else renderStudentDashboard(students[idx]); } } }; input.click(); }
 
-        function renderSetup() { 
-            currentScreen = 'setup'; 
-            const html = `<div class="pt-10 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold mb-4">Pengaturan</h2>
-            <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
-                <h3 class="font-bold text-blue-800 mb-1">Sambungkan Database</h3>
-                <p class="text-[10px] text-gray-500 mb-3">Tempelkan Link Google Sheet kelas Anda di bawah ini:</p>
-                <input type="text" id="sheetIdInput" value="${schoolData.sheetId || ''}" placeholder="Contoh: https://docs.google.com/..." class="w-full p-3 rounded border mb-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-400">
-                <button onclick="checkConnectionAndSave(document.querySelector('#sheetIdInput').value)" class="w-full btn-3d btn-blue py-3 rounded-lg font-bold mb-3">Simpan Database</button>
-                <button onclick="copyShareLink()" class="w-full btn-3d btn-orange py-3 rounded-lg font-bold text-sm"><i class="fas fa-share-alt mr-2"></i> Salin Link Murid (Umum)</button>
-            </div>
-            <div class="bg-gray-50 p-4 rounded-xl border mb-4"><h3 class="font-bold mb-2">Profil & Excel</h3><div class="flex justify-center mb-4"><div class="relative w-24 h-24"><div class="w-full h-full bg-white rounded-full overflow-hidden border-4 border-gray-200 shadow flex items-center justify-center"><img src="${schoolData.logo}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div><button onclick="document.getElementById('schoolLogoInput').click()" class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center border-2 border-white"><i class="fas fa-camera"></i></button><input type="file" id="schoolLogoInput" accept="image/*" class="hidden" onchange="previewSchoolLogo(event)"></div></div><div class="space-y-3"><label class="text-[10px] font-bold text-gray-500 uppercase">Nama Kelas (Contoh: 6)</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-3 border rounded font-bold"><label class="text-[10px] font-bold text-gray-500 uppercase block">Nama Sekolah</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-3 border rounded"><label class="text-[10px] font-bold text-gray-500 uppercase block">Kabupaten/Kota (Untuk Kop Excel)</label><input type="text" id="sCity" value="${schoolData.city}" class="w-full p-3 border rounded"><label class="text-[10px] font-bold text-gray-500 uppercase block">Password Guru</label><input type="text" id="tPass" value="${schoolData.teacherPassword || 'QA-Poin77'}" class="w-full p-3 border rounded text-red-600 font-bold"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl font-bold text-white mt-6">Simpan Profil & Password</button></div><button onclick="resetAll()" class="w-full py-3 mt-8 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div>`; 
-            document.getElementById('appContent').innerHTML = html; 
-        }
-
-        function copyShareLink() { 
-            if(!schoolData.sheetId) return Swal.fire('Gagal', 'ID Database belum disetting', 'error'); 
-            const baseUrl = window.location.origin + window.location.pathname;
-            const fl = `${baseUrl}?sid=${encodeURIComponent(schoolData.sheetId)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&city=${encodeURIComponent(schoolData.city)}&mode=student`; 
-            const el = document.createElement('textarea'); el.value = fl; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); 
-            Swal.fire({ title: 'Link Umum Tersalin!', icon: 'success' }); 
-        }
-        
-        window.previewSchoolLogo = async function(e) { const f = e.target.files[0]; if(f) { Swal.fire({title: 'Memproses Logo...', didOpen: () => Swal.showLoading()}); const b64 = await compressImage(f, false); schoolData.logo = b64; saveData(true); Swal.close(); renderSetup(); } }
-
-        function checkConnectionAndSave(inputValue) { 
-            if(!inputValue) return Swal.fire('Error', 'ID atau Link tidak boleh kosong', 'error'); 
-            let sheetId = inputValue.trim();
-            if (sheetId.includes('/d/')) { const match = sheetId.match(/\/d\/([a-zA-Z0-9-_]+)/); if (match && match[1]) { sheetId = match[1]; } }
-            if(!MASTER_API_URL || !MASTER_API_URL.startsWith("http")) return Swal.fire('Error Sistem', 'Developer belum memasukkan MASTER API URL di dalam kode HTML.', 'error');
-
-            Swal.fire({ title: 'Menghubungkan Database...', didOpen: () => { Swal.showLoading(); } }); 
-            fetch(MASTER_API_URL + '?action=read&sheetId=' + sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
-                if(data.error) return Swal.fire('Gagal Akses', data.error, 'error');
-                schoolData.sheetId = sheetId;
-                if(data.students && data.students.length > 0) {
-                    schoolData = {...schoolData, ...data.schoolData, sheetId: sheetId}; students = data.students;
-                    if(data.logs) logs = data.logs.map(l => ({...l, points: Number(l.points)}));
-                    if(data.behaviors) behaviors = data.behaviors.map(b => ({...b, points: Number(b.points)}));
-                    saveData(true); Swal.fire('Berhasil Terhubung!', 'Data ditarik kembali dari awan.', 'success').then(() => { document.querySelector('#sheetIdInput').value = sheetId; location.reload(); });
-                } else {
-                    saveData(); Swal.fire('Tersimpan', 'Aplikasi terhubung ke database baru.', 'success'); document.querySelector('#sheetIdInput').value = sheetId;
-                }
-            }).catch(e => { Swal.fire('Error', 'Gagal menghubungi Server Master. Cek koneksi Anda.', 'error'); });
-        }
-
-        function saveSettings() { schoolData.name = document.getElementById('sName').value; schoolData.location = document.getElementById('sLoc').value; schoolData.city = document.getElementById('sCity').value; schoolData.teacherPassword = document.getElementById('tPass').value; saveData(true); Swal.fire('Tersimpan', '', 'success'); }
-        function resetAll() { Swal.fire({ title: 'Reset Semua?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((r) => { if (r.isConfirmed) { localStorage.clear(); location.href = window.location.pathname; } }); }
-
-        function renderAddStudent() { 
-            currentScreen = 'add_student'; tempAddPhoto = ""; 
-            const html = `<div class="pt-6 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold mb-4">Tambah Siswa</h2><div class="flex justify-center mb-6"><div class="relative w-24 h-24"><div class="w-full h-full bg-gray-200 rounded-full overflow-hidden border-4 border-white shadow flex items-center justify-center text-gray-400"><i class="fas fa-user text-3xl" id="addPhotoPlaceholder"></i><img id="addPhotoPreview" src="" class="hidden w-full h-full object-cover absolute top-0 left-0"></div><button onclick="document.getElementById('addPhotoInput').click()" class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center border-2 border-white"><i class="fas fa-camera"></i></button><input type="file" id="addPhotoInput" accept="image/*" class="hidden" onchange="previewAddPhoto(event)"></div></div><form onsubmit="handleAddSubmit(event)" class="space-y-3 mb-6"><input name="name" placeholder="Nama Lengkap" required class="w-full p-3 border rounded"><div class="grid grid-cols-2 gap-2"><input name="nis" placeholder="NIS" required class="w-full p-3 border rounded"><input name="kelas" placeholder="Kelas" required class="w-full p-3 border rounded"></div><input type="date" name="dob" class="w-full p-3 border rounded"><button type="submit" class="btn-3d btn-green w-full py-3 rounded-lg font-bold">Simpan Individual</button></form><div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4 text-center"><h3 class="font-bold text-blue-800 text-sm mb-3">Tambah Banyak Siswa</h3><button onclick="document.getElementById('excelInput').click()" class="btn-3d btn-blue w-full py-2 rounded-lg font-bold text-sm mb-3"><i class="fas fa-file-excel mr-2"></i> Import dari Excel</button><button onclick="downloadTemplate()" class="text-xs text-blue-600 font-bold hover:underline"><i class="fas fa-download mr-1"></i> Download Template</button></div><button onclick="renderTeacherDashboard()" class="w-full py-3 text-gray-500 font-bold border border-gray-200 rounded-lg">Kembali</button></div>`; 
-            document.getElementById('appContent').innerHTML = html; 
-        }
-
-        window.previewAddPhoto = async function(e) { const f = e.target.files[0]; if(f) { Swal.fire({title: 'Memproses...', didOpen: () => Swal.showLoading()}); tempAddPhoto = await compressImage(f, false); document.getElementById('addPhotoPreview').src = tempAddPhoto; document.getElementById('addPhotoPreview').classList.remove('hidden'); document.getElementById('addPhotoPlaceholder').classList.add('hidden'); Swal.close(); } }
-        
-        function handleAddSubmit(e) { 
-            e.preventDefault(); const f = e.target, nis = String(f.nis.value).trim(); 
-            const cleanNis = nis.toLowerCase();
-            if(students.find(s => String(s.nis).trim().toLowerCase() === cleanNis)) return Swal.fire('Gagal', 'NIS sudah ada', 'error'); 
-            
-            deletedStudentNis = deletedStudentNis.filter(n => String(n).trim().toLowerCase() !== cleanNis);
-            
-            students.push({ name: String(f.name.value).trim(), nis: nis, kelas: String(f.kelas.value).trim(), dob: f.dob.value, photo: tempAddPhoto, studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
-            saveData(); Swal.fire('Sukses', 'Data disimpan. Tunggu status menjadi Online sebelum membagikan link.', 'success').then(() => renderTeacherDashboard()); 
-        }
-        
-        function renderEditStudent(nis) { 
-            currentScreen = 'edit_student'; const s = students.find(x => String(x.nis).trim().toLowerCase() === String(nis).trim().toLowerCase()); if (!s) return; 
-            const html = `<div class="pt-6 px-6 fade-in"><h2 class="text-xl font-bold mb-4">Edit Siswa</h2><form onsubmit="handleUpdateStudent(event, '${nis}')" class="space-y-4"><input name="name" value="${s.name}" required class="w-full p-3 rounded border"><input value="${s.nis}" disabled class="w-full p-3 rounded bg-gray-100 border text-gray-400"><input name="kelas" value="${s.kelas}" class="w-full p-3 rounded border"><input type="date" name="dob" value="${s.dob}" class="w-full p-3 rounded border"><button class="btn-3d btn-yellow w-full py-3 rounded font-bold">Update</button></form><button onclick="deleteStudent('${nis}')" class="w-full mt-4 py-3 text-red-500 font-bold border border-red-200 rounded">Hapus Siswa</button><button onclick="renderStudentDetail('${nis}')" class="w-full mt-2 py-3 text-gray-500">Batal</button></div>`; 
-            document.getElementById('appContent').innerHTML = html; 
-        }
-
-        function handleUpdateStudent(e, oldNis) { 
-            e.preventDefault(); const f = e.target;
-            performAtomicSync(() => {
-                const idx = students.findIndex(s => String(s.nis).trim().toLowerCase() === String(oldNis).trim().toLowerCase()); 
-                if (idx !== -1) { students[idx] = { ...students[idx], name: f.name.value, kelas: f.kelas.value, dob: f.dob.value }; }
-            }, 'Data berhasil diperbarui', () => renderStudentDetail(oldNis));
-        }
-
-        function deleteStudent(nis) { 
-            Swal.fire({ title: 'Hapus Siswa?', text: "Semua riwayat poin siswa ini juga akan terhapus.", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(r => { 
-                if(r.isConfirmed) { 
-                    performAtomicSync(() => { 
-                        deletedStudentNis.push(String(nis).trim().toLowerCase());
-                        students = students.filter(s => String(s.nis).trim().toLowerCase() !== String(nis).trim().toLowerCase()); 
-                        let logsToDel = logs.filter(l => String(l.studentId).trim().toLowerCase() === String(nis).trim().toLowerCase());
-                        logsToDel.forEach(l => deletedLogIds.push(l.id));
-                        logs = logs.filter(l => String(l.studentId).trim().toLowerCase() !== String(nis).trim().toLowerCase()); 
-                    }, 'Siswa berhasil dihapus', () => { if (currentScreen === 'edit_student' || currentScreen === 'teacher_detail') renderTeacherDashboard(); }); 
-                } 
-            }); 
-        }
-
-        function deleteAllStudents() {
-            Swal.fire({ title: 'Hapus SEMUA Siswa?', text: "Data ini tidak bisa dikembalikan!", icon: 'error', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Ya, Hapus Semua' }).then(r => { 
-                if(r.isConfirmed) { 
-                    performAtomicSync(() => { 
-                        students.forEach(s => deletedStudentNis.push(String(s.nis).trim().toLowerCase()));
-                        logs.forEach(l => deletedLogIds.push(l.id));
-                        students = []; logs = []; 
-                    }, 'Semua data siswa berhasil dihapus', () => renderTeacherDashboard()); 
-                } 
-            });
-        }
-
+        // BAGIAN FORM TAMBAH POIN BARU (MENJADI JAUH LEBIH DETAIL)
         function renderManageBehaviors() { 
             currentScreen = 'manage_behaviors'; 
             const order = { 'plus': 1, 'home_plus': 2, 'minus': 3, 'home_minus': 4, 'neutral': 5 };
@@ -904,18 +788,69 @@
             document.getElementById('appContent').innerHTML = html; 
         }
 
-        // FUNGSI EDIT DAN DELETE DIPERBARUI BERDASARKAN ID (BUKAN INDEX)
         function editBehavior(id) { 
             const b = behaviors.find(x => String(x.id) === String(id)); 
             if(!b) return;
+            
+            let lokasi = (b.type.includes('home')) ? 'rumah' : 'sekolah';
+            let sifat = (b.type.includes('minus')) ? 'negatif' : 'positif';
+
             Swal.fire({ 
                 title: 'Edit Poin', 
-                html: `<input id="eL" class="swal2-input" value="${b.label}"><input id="eP" type="number" class="swal2-input" value="${Math.abs(b.points)}">`, 
+                html: `
+                    <div class="space-y-3 text-left">
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase">Nama Aktivitas</label>
+                            <input id="swal-nama" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400" value="${b.label}">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase">Jumlah Poin</label>
+                            <input id="swal-poin" type="number" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400" value="${Math.abs(b.points)}" min="1" max="100">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase">Lokasi Aktivitas</label>
+                            <select id="swal-lokasi" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400">
+                                <option value="sekolah" ${lokasi === 'sekolah' ? 'selected' : ''}>Di Sekolah</option>
+                                <option value="rumah" ${lokasi === 'rumah' ? 'selected' : ''}>Di Rumah</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase">Sifat Aktivitas</label>
+                            <select id="swal-sifat" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400">
+                                <option value="positif" ${sifat === 'positif' ? 'selected' : ''}>Kebaikan (Positif +)</option>
+                                <option value="negatif" ${sifat === 'negatif' ? 'selected' : ''}>Pelanggaran (Negatif -)</option>
+                            </select>
+                        </div>
+                    </div>
+                `, 
+                showCancelButton: true,
+                confirmButtonText: 'Simpan',
+                cancelButtonText: 'Batal',
                 preConfirm: () => { 
-                    const l = document.getElementById('eL').value.trim(); 
-                    let p = parseInt(document.getElementById('eP').value); 
-                    if(!l || isNaN(p) || p <= 0) { Swal.showValidationMessage('Isi dengan benar!'); return false; }
-                    return { label: l, points: p > 100 ? 100 : p }; 
+                    const nama = document.getElementById('swal-nama').value.trim(); 
+                    let poin = parseInt(document.getElementById('swal-poin').value); 
+                    const loc = document.getElementById('swal-lokasi').value;
+                    const sif = document.getElementById('swal-sifat').value;
+                    
+                    if(!nama || isNaN(poin) || poin <= 0) { Swal.showValidationMessage('Isi dengan benar!'); return false; }
+                    
+                    let type = 'plus';
+                    if (loc === 'sekolah' && sif === 'positif') type = 'plus';
+                    else if (loc === 'sekolah' && sif === 'negatif') type = 'minus';
+                    else if (loc === 'rumah' && sif === 'positif') type = 'home_plus';
+                    else if (loc === 'rumah' && sif === 'negatif') type = 'home_minus';
+
+                    poin = (sif === 'negatif') ? -Math.abs(poin > 100 ? 100 : poin) : Math.abs(poin > 100 ? 100 : poin); 
+
+                    let icon = b.icon;
+                    if (b.type !== type || b.icon === 'fa-star') {
+                        if (type === 'home_plus') icon = 'fa-house-chimney-user';
+                        else if (type === 'home_minus') icon = 'fa-house-crack';
+                        else if (type === 'minus') icon = 'fa-triangle-exclamation';
+                        else icon = 'fa-medal';
+                    }
+
+                    return { label: nama, points: poin, type: type, icon: icon }; 
                 } 
             }).then((r) => { 
                 if(r.isConfirmed) { 
@@ -923,7 +858,9 @@
                         let target = behaviors.find(x => String(x.id) === String(id));
                         if(target) {
                             target.label = r.value.label; 
-                            target.points = (target.type === 'minus' || target.type === 'home_minus') ? -Math.abs(r.value.points) : Math.abs(r.value.points); 
+                            target.points = r.value.points;
+                            target.type = r.value.type;
+                            target.icon = r.value.icon;
                         }
                     }, 'Poin diperbarui!', () => renderManageBehaviors());
                 } 
@@ -932,19 +869,63 @@
 
         function addNewBehaviorPrompt() { 
             Swal.fire({ 
-                html: `<input id="l" class="swal2-input" placeholder="Nama Aktifitas"><input id="p" type="number" class="swal2-input" placeholder="Poin"><select id="t" class="swal2-input"><option value="plus">Sekolah: Positif (+)</option><option value="minus">Sekolah: Negatif (-)</option><option value="home_plus">Rumah: Positif (+)</option><option value="home_minus">Rumah: Negatif (-)</option></select>`, 
+                title: 'Tambah Poin Baru',
+                html: `
+                    <div class="space-y-3 text-left">
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase">Nama Aktivitas</label>
+                            <input id="swal-nama" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400" placeholder="Contoh: Membersihkan Kamar">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase">Jumlah Poin</label>
+                            <input id="swal-poin" type="number" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400" placeholder="Contoh: 10" min="1" max="100">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase">Lokasi Aktivitas</label>
+                            <select id="swal-lokasi" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400">
+                                <option value="sekolah">Di Sekolah</option>
+                                <option value="rumah">Di Rumah</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase">Sifat Aktivitas</label>
+                            <select id="swal-sifat" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400">
+                                <option value="positif">Kebaikan (Positif +)</option>
+                                <option value="negatif">Pelanggaran (Negatif -)</option>
+                            </select>
+                        </div>
+                    </div>
+                `, 
+                showCancelButton: true,
+                confirmButtonText: 'Simpan',
+                cancelButtonText: 'Batal',
                 preConfirm: () => { 
-                    const l = document.getElementById('l').value.trim(); 
-                    let p = parseInt(document.getElementById('p').value); 
-                    const t = document.getElementById('t').value; 
-                    if(!l || isNaN(p) || p <= 0) { Swal.showValidationMessage('Isi dengan benar!'); return false; }
-                    p = (t === 'minus' || t === 'home_minus') ? -Math.abs(p > 100 ? 100 : p) : Math.abs(p > 100 ? 100 : p); 
-                    return { label: l, points: p, type: t }; 
+                    const nama = document.getElementById('swal-nama').value.trim(); 
+                    let poin = parseInt(document.getElementById('swal-poin').value); 
+                    const loc = document.getElementById('swal-lokasi').value;
+                    const sif = document.getElementById('swal-sifat').value;
+                    
+                    if(!nama || isNaN(poin) || poin <= 0) { Swal.showValidationMessage('Isi dengan benar!'); return false; }
+                    
+                    let type = 'plus';
+                    if (loc === 'sekolah' && sif === 'positif') type = 'plus';
+                    else if (loc === 'sekolah' && sif === 'negatif') type = 'minus';
+                    else if (loc === 'rumah' && sif === 'positif') type = 'home_plus';
+                    else if (loc === 'rumah' && sif === 'negatif') type = 'home_minus';
+
+                    poin = (sif === 'negatif') ? -Math.abs(poin > 100 ? 100 : poin) : Math.abs(poin > 100 ? 100 : poin); 
+
+                    let icon = 'fa-medal';
+                    if (type === 'home_plus') icon = 'fa-house-chimney-user';
+                    else if (type === 'home_minus') icon = 'fa-house-crack';
+                    else if (type === 'minus') icon = 'fa-triangle-exclamation';
+
+                    return { label: nama, points: poin, type: type, icon: icon }; 
                 } 
             }).then((r) => {
                 if(r.isConfirmed) {
                     performAtomicSync(() => {
-                        behaviors.push({id: Date.now(), label: r.value.label, points: r.value.points, type: r.value.type, icon: 'fa-star'}); 
+                        behaviors.push({id: Date.now(), label: r.value.label, points: r.value.points, type: r.value.type, icon: r.value.icon}); 
                     }, 'Poin ditambahkan!', () => renderManageBehaviors());
                 }
             }); 
@@ -959,6 +940,20 @@
                     }, 'Poin dihapus!', () => renderManageBehaviors());
                 }
             });
+        }
+
+        function renderSetup() { 
+            currentScreen = 'setup'; 
+            const html = `<div class="pt-10 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold mb-4">Pengaturan</h2>
+            <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
+                <h3 class="font-bold text-blue-800 mb-1">Sambungkan Database</h3>
+                <p class="text-[10px] text-gray-500 mb-3">Tempelkan Link Google Sheet kelas Anda di bawah ini:</p>
+                <input type="text" id="sheetIdInput" value="${schoolData.sheetId || ''}" placeholder="Contoh: https://docs.google.com/..." class="w-full p-3 rounded border mb-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-400">
+                <button onclick="checkConnectionAndSave(document.querySelector('#sheetIdInput').value)" class="w-full btn-3d btn-blue py-3 rounded-lg font-bold mb-3">Simpan Database</button>
+                <button onclick="copyShareLink()" class="w-full btn-3d btn-orange py-3 rounded-lg font-bold text-sm"><i class="fas fa-share-alt mr-2"></i> Salin Link Murid (Umum)</button>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-xl border mb-4"><h3 class="font-bold mb-2">Profil & Excel</h3><div class="flex justify-center mb-4"><div class="relative w-24 h-24"><div class="w-full h-full bg-white rounded-full overflow-hidden border-4 border-gray-200 shadow flex items-center justify-center"><img src="${schoolData.logo}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div><button onclick="document.getElementById('schoolLogoInput').click()" class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center border-2 border-white"><i class="fas fa-camera"></i></button><input type="file" id="schoolLogoInput" accept="image/*" class="hidden" onchange="previewSchoolLogo(event)"></div></div><div class="space-y-3"><label class="text-[10px] font-bold text-gray-500 uppercase">Nama Kelas (Contoh: 6)</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-3 border rounded font-bold"><label class="text-[10px] font-bold text-gray-500 uppercase block">Nama Sekolah</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-3 border rounded"><label class="text-[10px] font-bold text-gray-500 uppercase block">Kabupaten/Kota (Untuk Kop Excel)</label><input type="text" id="sCity" value="${schoolData.city}" class="w-full p-3 border rounded"><label class="text-[10px] font-bold text-gray-500 uppercase block">Password Guru</label><input type="text" id="tPass" value="${schoolData.teacherPassword || 'QA-Poin77'}" class="w-full p-3 border rounded text-red-600 font-bold"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl font-bold text-white mt-6">Simpan Profil & Password</button></div><button onclick="resetAll()" class="w-full py-3 mt-8 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div>`; 
+            document.getElementById('appContent').innerHTML = html; 
         }
 
         async function exportToExcel() { 
