@@ -186,6 +186,7 @@
             const sheetIdParam = params.get('sid'), sName = params.get('school'), sLoc = params.get('loc'), sCity = params.get('city'), mode = params.get('mode'), lockNis = params.get('nis');
             
             if (sheetIdParam && schoolData.sheetId && sheetIdParam !== schoolData.sheetId) {
+                // RESET TOTAL DATA LOKAL KARENA PINDAH KELAS
                 students = []; 
                 logs = []; 
                 deletedLogIds = []; 
@@ -193,10 +194,18 @@
                 deletedBehaviorIds = [];
                 behaviors = initialBehaviors; 
                 localStorage.removeItem('lockedStudentNis'); 
+                
+                // KUNCI PERBAIKAN LINK: Set lastUpdate ke 0 agar aplikasi WAJIB mengambil data dari Sheet baru
+                schoolData.lastUpdate = 0; 
             }
 
-            if (mode === 'student_locked' && lockNis) { localStorage.setItem('lockedStudentNis', lockNis); isStudentModeOnly = true; } 
-            else if (mode === 'student') { isStudentModeOnly = true; }
+            if (mode === 'student_locked' && lockNis) { 
+                localStorage.setItem('lockedStudentNis', lockNis); 
+                isStudentModeOnly = true; 
+            } 
+            else if (mode === 'student') { 
+                isStudentModeOnly = true; 
+            }
             
             let isUpd = false;
             if (sheetIdParam && sheetIdParam !== schoolData.sheetId) { schoolData.sheetId = sheetIdParam; isUpd = true; }
@@ -559,14 +568,14 @@
         }
 
         window.setTab = function(type, nis = null) { 
-            ['good', 'bad', 'home_good', 'home_bad', 'salat', 'note'].forEach(t => { 
-                const el = document.getElementById('tab-' + t), btn = document.getElementById('btn-' + t); 
-                if(el) el.classList.toggle('hidden', t !== type);
-                if(btn) btn.className = t === type ? `tab-btn tab-active-${t}` : "tab-btn tab-inactive";
-            }); 
-            
-            const hc = document.getElementById('history-container');
-            if(hc) hc.classList.toggle('hidden', type === 'note');
+            // Ubah logika dari sekadar CSS hide/show menjadi render ulang secara penuh
+            // Agar riwayat (history) dan tombol aksi poin benar-benar tersaring sesuai tab aktif
+            if (currentScreen === 'teacher_detail') {
+                renderStudentDetail(currentViewedNis, type);
+            } else if (currentScreen === 'student_dashboard') {
+                const s = students.find(x => String(x.nis).trim().toLowerCase() === String(currentViewedNis).trim().toLowerCase());
+                if (s) renderStudentDashboard(s, type);
+            }
         }
         
         function deleteLog(id, nis, tab) { 
