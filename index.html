@@ -185,7 +185,6 @@
             const params = new URLSearchParams(window.location.search);
             const sheetIdParam = params.get('sid'), sName = params.get('school'), sLoc = params.get('loc'), sCity = params.get('city'), mode = params.get('mode'), lockNis = params.get('nis');
             
-            // --- DETEKSI PINDAH KELAS / DATABASE ---
             if (sheetIdParam && schoolData.sheetId && sheetIdParam !== schoolData.sheetId) {
                 students = []; 
                 logs = []; 
@@ -195,7 +194,6 @@
                 behaviors = initialBehaviors; 
                 localStorage.removeItem('lockedStudentNis'); 
             }
-            // ----------------------------------------
 
             if (mode === 'student_locked' && lockNis) { localStorage.setItem('lockedStudentNis', lockNis); isStudentModeOnly = true; } 
             else if (mode === 'student') { isStudentModeOnly = true; }
@@ -249,6 +247,55 @@
             }, 300);
         }
 
+        // ================= PENYEMPURNAAN ATOMIC SYNC MERGE =================
+        function processCloudMerge(data) {
+            // Merge Deleted Logs
+            let cloudDeleted = data.deletedLogIds || [];
+            deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
+            
+            // Merge Deleted Behaviors
+            if (data.deletedBehaviorIds) {
+                deletedBehaviorIds = [...new Set([...deletedBehaviorIds, ...data.deletedBehaviorIds.map(n=>String(n).trim())])];
+            }
+            
+            // Merge Deleted Students
+            let cloudStudents = data.students || [];
+            let activeCloudNis = cloudStudents.map(st => String(st.nis).trim().toLowerCase());
+            let cloudDeletedStudents = data.deletedStudentNis || [];
+            cloudDeletedStudents = cloudDeletedStudents.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
+            deletedStudentNis = deletedStudentNis.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
+            deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents.map(n=>String(n).trim().toLowerCase())])];
+
+            // Merge Logs
+            if(data.logs) {
+                let logMap = new Map();
+                data.logs.forEach(l => logMap.set(l.id, l));
+                logs.forEach(l => logMap.set(l.id, l)); // Local menimpa/mempertahankan jika ada penambahan instan
+                logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
+            }
+
+            // Merge Students
+            if(data.students) {
+                let sMap = new Map();
+                students.forEach(s => sMap.set(String(s.nis).trim().toLowerCase(), s)); // Local master
+                data.students.forEach(cloudS => {
+                    const nisKey = String(cloudS.nis).trim().toLowerCase();
+                    const localS = sMap.get(nisKey);
+                    // Cloud menimpa, tapi menjaga foto/cover lokal jika cloud tidak punya
+                    sMap.set(nisKey, { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" });
+                });
+                students = Array.from(sMap.values()).filter(s => !deletedStudentNis.includes(String(s.nis).trim().toLowerCase()));
+            }
+
+            // Merge Behaviors (Mencegah Custom Poin hilang)
+            if(data.behaviors) {
+                let bMap = new Map();
+                behaviors.forEach(b => bMap.set(String(b.id), b)); // Pertahankan Local Custom Behaviors
+                data.behaviors.forEach(b => bMap.set(String(b.id), b)); // Timpa dengan Cloud jika ada update Label/Point
+                behaviors = Array.from(bMap.values()).filter(b => !deletedBehaviorIds.includes(String(b.id)));
+            }
+        }
+
         function loadFromCloud(isManual = false) {
             if(!schoolData.sheetId || !MASTER_API_URL.startsWith("http")) return; 
             if(isManual) Swal.fire({title: 'Menyinkronkan...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
@@ -266,36 +313,8 @@
                     return;
                 }
 
-                let cloudDeleted = data.deletedLogIds || [];
-                deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
-                
-                if (data.deletedBehaviorIds) {
-                    deletedBehaviorIds = [...new Set([...deletedBehaviorIds, ...data.deletedBehaviorIds.map(n=>String(n).trim())])];
-                }
-                
-                let cloudStudents = data.students || [];
-                let activeCloudNis = cloudStudents.map(st => String(st.nis).trim().toLowerCase());
-                
-                let cloudDeletedStudents = data.deletedStudentNis || [];
-                cloudDeletedStudents = cloudDeletedStudents.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
-                deletedStudentNis = deletedStudentNis.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
-                deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents.map(n=>String(n).trim().toLowerCase())])];
+                processCloudMerge(data);
 
-                let logMap = new Map();
-                (data.logs || []).forEach(l => logMap.set(l.id, l));
-                logs.forEach(l => logMap.set(l.id, l));
-                logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
-
-                if(data.students && data.students.length > 0) {
-                    let validCloudStudents = cloudStudents.filter(s => !deletedStudentNis.includes(String(s.nis).trim().toLowerCase()));
-                    students = validCloudStudents.map(cloudS => {
-                        const localS = students.find(l => String(l.nis).trim().toLowerCase() === String(cloudS.nis).trim().toLowerCase());
-                        return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
-                    });
-                }
-                if(data.behaviors) {
-                    behaviors = data.behaviors.filter(b => !deletedBehaviorIds.includes(String(b.id)));
-                }
                 if(data.schoolData) {
                     schoolData = {...schoolData, ...data.schoolData};
                     schoolData.lastUpdate = cloudTime > localTime ? cloudTime : localTime;
@@ -321,36 +340,8 @@
             
             fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r => r.json()).then(data => {
                 if(data.error) throw new Error(data.error);
-                let cloudDeleted = data.deletedLogIds || [];
-                deletedLogIds = [...new Set([...deletedLogIds, ...cloudDeleted])];
                 
-                if (data.deletedBehaviorIds) {
-                    deletedBehaviorIds = [...new Set([...deletedBehaviorIds, ...data.deletedBehaviorIds.map(n=>String(n).trim())])];
-                }
-                
-                let cloudStudents = data.students || [];
-                let activeCloudNis = cloudStudents.map(st => String(st.nis).trim().toLowerCase());
-                
-                let cloudDeletedStudents = data.deletedStudentNis || [];
-                cloudDeletedStudents = cloudDeletedStudents.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
-                deletedStudentNis = deletedStudentNis.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
-                deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents.map(n=>String(n).trim().toLowerCase())])];
-
-                let logMap = new Map();
-                (data.logs || []).forEach(l => logMap.set(l.id, l));
-                logs.forEach(l => logMap.set(l.id, l)); 
-                logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
-
-                if(data.students && data.students.length > 0) {
-                    let validCloudStudents = cloudStudents.filter(s => !deletedStudentNis.includes(String(s.nis).trim().toLowerCase()));
-                    students = validCloudStudents.map(cloudS => {
-                        const localS = students.find(l => String(l.nis).trim().toLowerCase() === String(cloudS.nis).trim().toLowerCase());
-                        return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
-                    });
-                }
-                if(data.behaviors) {
-                    behaviors = data.behaviors.filter(b => !deletedBehaviorIds.includes(String(b.id)));
-                }
+                processCloudMerge(data);
                 
                 actionCallback(); 
                 saveData(false); 
@@ -363,6 +354,7 @@
                 else { Swal.close(); if(uiCallback) uiCallback(); }
             });
         }
+        // =========================================================================
         
         function refreshActiveUI() {
             if(currentScreen === 'teacher_dashboard') renderTeacherDashboard();
@@ -679,24 +671,7 @@
                     fetch(MASTER_API_URL + '?action=read&sheetId=' + schoolData.sheetId + '&t=' + Date.now()).then(r=>r.json()).then(data => { 
                         if(data.error) throw new Error(data.error);
                         
-                        let cloudStudents = data.students || [];
-                        let activeCloudNis = cloudStudents.map(st => String(st.nis).trim().toLowerCase());
-                        
-                        let cloudDeletedStudents = data.deletedStudentNis || [];
-                        cloudDeletedStudents = cloudDeletedStudents.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
-                        deletedStudentNis = deletedStudentNis.filter(n => !activeCloudNis.includes(String(n).trim().toLowerCase()));
-                        
-                        deletedStudentNis = [...new Set([...deletedStudentNis, ...cloudDeletedStudents.map(n=>String(n).trim().toLowerCase())])];
-                        
-                        if(data.students) { 
-                            let validCloudStudents = cloudStudents.filter(st => !deletedStudentNis.includes(String(st.nis).trim().toLowerCase()));
-                            students = validCloudStudents.map(cloudS => {
-                                const localS = students.find(l => String(l.nis).trim().toLowerCase() === String(cloudS.nis).trim().toLowerCase());
-                                return { ...cloudS, photo: localS?.photo || cloudS.photo || "", studentPhoto: localS?.studentPhoto || cloudS.studentPhoto || "", teacherCoverPhoto: localS?.teacherCoverPhoto || cloudS.teacherCoverPhoto || "", studentCoverPhoto: localS?.studentCoverPhoto || cloudS.studentCoverPhoto || "" };
-                            });
-                        }
-                        if(data.logs) logs = data.logs; 
-                        if(data.behaviors) behaviors = data.behaviors; 
+                        processCloudMerge(data);
                         saveData(true); 
                         
                         const f = students.find(x => String(x.nis).trim().toLowerCase() === cleanNis); 
