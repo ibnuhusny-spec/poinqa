@@ -202,9 +202,12 @@
             if (mode === 'student_locked' && lockNis) { 
                 localStorage.setItem('lockedStudentNis', lockNis); 
                 isStudentModeOnly = true; 
+                schoolData.lastUpdate = 0; // Wajibkan ambil data terbaru saat buka link murid
             } 
             else if (mode === 'student') { 
+                localStorage.removeItem('lockedStudentNis'); // Lepas kuncian NIS lama agar bisa pilih murid lain
                 isStudentModeOnly = true; 
+                schoolData.lastUpdate = 0; // Wajibkan ambil data terbaru saat buka link murid
             }
             
             let isUpd = false;
@@ -273,9 +276,9 @@
 
             if(data.logs) {
                 let logMap = new Map();
-                data.logs.forEach(l => logMap.set(l.id, l));
-                logs.forEach(l => logMap.set(l.id, l)); 
-                logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id));
+                logs.forEach(l => logMap.set(String(l.id), l)); 
+                data.logs.forEach(l => logMap.set(String(l.id), l)); // Cloud logs prioritaskan & timpa log lokal
+                logs = Array.from(logMap.values()).filter(l => !deletedLogIds.includes(l.id) && !deletedLogIds.includes(String(l.id)));
             }
 
             if(data.students) {
@@ -308,7 +311,8 @@
                 const localTime = schoolData.lastUpdate || 0;
                 const cloudTime = (data.schoolData && data.schoolData.lastUpdate) ? data.schoolData.lastUpdate : 0;
                 
-                if (localTime > cloudTime && !isManual) {
+                // Mencegah HP Murid/Orang Tua menimpa data Cloud saat auto load
+                if (localTime > cloudTime && !isManual && !isStudentModeOnly) {
                     syncToCloud(); 
                     if(isManual) Swal.close();
                     return;
@@ -318,7 +322,7 @@
 
                 if(data.schoolData) {
                     schoolData = {...schoolData, ...data.schoolData};
-                    schoolData.lastUpdate = cloudTime > localTime ? cloudTime : localTime;
+                    schoolData.lastUpdate = Math.max(cloudTime, localTime);
                 }
 
                 saveData(true); 
