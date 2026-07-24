@@ -81,7 +81,7 @@
 
     <script>
         // =========================================================================
-        const MASTER_API_URL = "https://script.google.com/macros/s/AKfycbwYkt3PWXZFwOp2PLOQ3q5SSSWLAW3uqzyU5Zu_3q-aipk6IiLL4R3ZmjiwTS0fIlX7/exec"; 
+        const MASTER_API_URL = "https://script.google.com/macros/s/AKfycbxuZ8E8UOyB78o-e0KvvKCcvU14QVK5WjD5JC49auTmw3ix0BoW7xni0AMKm1gsM6VF/exec"; 
         // =========================================================================
 
         const defaultSchoolData = { name: "6", location: "Nama Sekolah", city: "Kabupaten Maros", logo: "./logo.png", sheetId: "", teacherPassword: "QA-Poin77", lastUpdate: 0 };
@@ -224,7 +224,9 @@
 
         function goHome() { if(currentScreen !== 'splash') { if (localStorage.getItem('lockedStudentNis')) handleAutoLogin(localStorage.getItem('lockedStudentNis')); else if (isStudentModeOnly) renderStudentLogin(); else renderModeSelection(); } }
         function goBack() {
-            if (['teacher_detail', 'add_student', 'manage_behaviors', 'setup', 'edit_student'].includes(currentScreen)) renderTeacherDashboard(); 
+            if (['add_student', 'manage_behaviors', 'setup'].includes(currentScreen)) renderTeacherDashboard(); 
+            else if (currentScreen === 'edit_student') { if (currentViewedNis) renderStudentDetail(currentViewedNis); else renderTeacherDashboard(); }
+            else if (['teacher_detail'].includes(currentScreen)) renderTeacherDashboard(); 
             else if (['teacher_dashboard'].includes(currentScreen)) renderModeSelection(); 
             else if (currentScreen === 'student_login') { if (isStudentModeOnly) renderSplash(); else renderModeSelection(); }
             else if (currentScreen === 'student_dashboard') { if (localStorage.getItem('lockedStudentNis')) renderSplash(); else renderStudentLogin(); }
@@ -447,6 +449,163 @@
         }
 
         function filterStudents() { const q = document.getElementById('searchStudent').value.toLowerCase(); Array.from(document.getElementById('studentListContainer').children).forEach(c => { const n = c.querySelector('h3')?.innerText.toLowerCase() || ''; c.style.display = n.includes(q) ? 'flex' : 'none'; }); }
+
+        function renderAddStudent() {
+            currentScreen = 'add_student';
+            const html = `<div class="px-4 py-6 fade-in">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4"><i class="fas fa-user-plus text-blue-500 mr-2"></i>Tambah Siswa Baru</h2>
+                <div class="bg-white p-5 rounded-2xl shadow-md border border-gray-100 mb-6 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nama Lengkap Siswa *</label>
+                        <input type="text" id="addName" placeholder="Contoh: Ahmad Fadhil" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400 font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">NIS (Nomor Induk Siswa) *</label>
+                        <input type="text" id="addNis" placeholder="Contoh: 1001" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400 font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Kelas</label>
+                        <input type="text" id="addKelas" value="${schoolData.name || '6'}" placeholder="Contoh: 6A" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400 font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tanggal Lahir</label>
+                        <input type="date" id="addDob" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-400 font-semibold text-gray-700">
+                    </div>
+                    <button onclick="saveNewStudent()" class="btn-3d btn-blue w-full py-3.5 rounded-xl text-md font-bold shadow-lg mt-2">
+                        <i class="fas fa-save mr-2"></i> SIMPAN SISWA
+                    </button>
+                </div>
+                <div class="bg-amber-50 p-4 rounded-xl border border-amber-200 text-center">
+                    <p class="text-xs text-amber-800 font-medium mb-3"><i class="fas fa-file-excel mr-1 text-amber-600"></i> Punya banyak siswa? Impor sekaligus dari Excel!</p>
+                    <div class="flex gap-2">
+                        <button onclick="downloadTemplate()" class="flex-1 bg-white text-amber-700 border border-amber-300 py-2 rounded-lg text-xs font-bold shadow-sm">
+                            <i class="fas fa-download mr-1"></i> Download Template
+                        </button>
+                        <button onclick="document.getElementById('excelInput').click()" class="flex-1 btn-3d btn-green py-2 rounded-lg text-xs font-bold">
+                            <i class="fas fa-upload mr-1"></i> Upload Excel
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+            document.getElementById('appContent').innerHTML = html;
+        }
+
+        function saveNewStudent() {
+            const name = document.getElementById('addName').value.trim();
+            const nis = document.getElementById('addNis').value.trim();
+            const kelas = document.getElementById('addKelas').value.trim() || schoolData.name || "6";
+            const dob = document.getElementById('addDob').value;
+
+            if(!name || !nis) return Swal.fire('Perhatian', 'Nama dan NIS siswa wajib diisi!', 'warning');
+
+            const cleanNis = nis.toLowerCase();
+            const existing = students.find(s => String(s.nis).trim().toLowerCase() === cleanNis);
+            if(existing) return Swal.fire('Gagal', `Siswa dengan NIS ${nis} sudah ada (${existing.name})!`, 'error');
+
+            performAtomicSync(() => {
+                deletedStudentNis = deletedStudentNis.filter(n => String(n).trim().toLowerCase() !== cleanNis);
+                students.push({ name, nis, kelas, dob, photo: "", studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" });
+            }, `Siswa ${name} berhasil ditambahkan!`, () => renderTeacherDashboard());
+        }
+
+        function renderEditStudent(nis) {
+            currentScreen = 'edit_student';
+            const s = students.find(x => String(x.nis).trim().toLowerCase() === String(nis).trim().toLowerCase());
+            if(!s) return renderTeacherDashboard();
+
+            const html = `<div class="px-4 py-6 fade-in">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4"><i class="fas fa-user-edit text-yellow-500 mr-2"></i>Edit Data Siswa</h2>
+                <div class="bg-white p-5 rounded-2xl shadow-md border border-gray-100 mb-6 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nama Lengkap Siswa *</label>
+                        <input type="text" id="editName" value="${s.name}" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-yellow-400 font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">NIS (Nomor Induk Siswa)</label>
+                        <input type="text" id="editNis" value="${s.nis}" disabled class="w-full p-3 rounded-lg border bg-gray-100 text-gray-500 font-bold cursor-not-allowed">
+                        <span class="text-[10px] text-gray-400">NIS tidak dapat diubah (Kunci Utama ID).</span>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Kelas</label>
+                        <input type="text" id="editKelas" value="${s.kelas}" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-yellow-400 font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tanggal Lahir</label>
+                        <input type="date" id="editDob" value="${s.dob || ''}" class="w-full p-3 rounded-lg border focus:ring-2 focus:ring-yellow-400 font-semibold text-gray-700">
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="saveEditStudent('${s.nis}')" class="flex-1 btn-3d btn-green py-3.5 rounded-xl text-md font-bold shadow-lg">
+                            <i class="fas fa-check mr-2"></i> SIMPAN PERUBAHAN
+                        </button>
+                    </div>
+                </div>
+                <button onclick="deleteStudent('${s.nis}')" class="w-full py-3 text-red-500 border border-red-300 bg-red-50 rounded-xl font-bold text-sm shadow-sm hover:bg-red-100">
+                    <i class="fas fa-trash-alt mr-2"></i> HAPUS SISWA INI PERMANEN
+                </button>
+            </div>`;
+            document.getElementById('appContent').innerHTML = html;
+        }
+
+        function saveEditStudent(nis) {
+            const name = document.getElementById('editName').value.trim();
+            const kelas = document.getElementById('editKelas').value.trim();
+            const dob = document.getElementById('editDob').value;
+
+            if(!name) return Swal.fire('Perhatian', 'Nama siswa tidak boleh kosong!', 'warning');
+
+            const idx = students.findIndex(x => String(x.nis).trim().toLowerCase() === String(nis).trim().toLowerCase());
+            if(idx === -1) return;
+
+            performAtomicSync(() => {
+                students[idx].name = name;
+                students[idx].kelas = kelas;
+                students[idx].dob = dob;
+            }, 'Data siswa diperbarui!', () => renderStudentDetail(nis));
+        }
+
+        function deleteStudent(nis) {
+            const s = students.find(x => String(x.nis).trim().toLowerCase() === String(nis).trim().toLowerCase());
+            if(!s) return;
+
+            Swal.fire({
+                title: 'Hapus Siswa?',
+                html: `Apakah Anda yakin ingin menghapus data siswa <b>${s.name}</b> (NIS: ${s.nis})? Data riwayat poin siswa ini juga akan terhapus.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Ya, Hapus Permanen',
+                cancelButtonText: 'Batal'
+            }).then((r) => {
+                if(r.isConfirmed) {
+                    performAtomicSync(() => {
+                        const cleanNis = String(nis).trim().toLowerCase();
+                        deletedStudentNis.push(cleanNis);
+                        students = students.filter(x => String(x.nis).trim().toLowerCase() !== cleanNis);
+                        logs = logs.filter(l => String(l.studentId).trim().toLowerCase() !== cleanNis);
+                    }, 'Siswa berhasil dihapus!', () => renderTeacherDashboard());
+                }
+            });
+        }
+
+        function deleteAllStudents() {
+            Swal.fire({
+                title: 'Hapus SEMUA Siswa?',
+                text: 'SEMUA data siswa dan riwayat poin kelas ini akan dihapus secara permanen. Tindakan ini tidak dapat dibatalkan!',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Ya, Hapus Semua Data',
+                cancelButtonText: 'Batal'
+            }).then((r) => {
+                if(r.isConfirmed) {
+                    performAtomicSync(() => {
+                        students.forEach(s => deletedStudentNis.push(String(s.nis).trim().toLowerCase()));
+                        students = [];
+                        logs = [];
+                    }, 'Semua data siswa berhasil dihapus!', () => renderTeacherDashboard());
+                }
+            });
+        }
 
         function generateSalatHTML(s, role) {
             const salatList = [
@@ -1040,8 +1199,15 @@
             if(!sheetId) return Swal.fire('Error', 'Link atau ID Sheet tidak valid!', 'error');
             
             schoolData.sheetId = sheetId;
+            schoolData.lastUpdate = 0; // Reset lastUpdate agar langsung sync data cloud
             saveData(true);
-            Swal.fire('Tersimpan', 'Database Google Sheet berhasil disambungkan.', 'success');
+            Swal.fire({
+                title: 'Tersimpan!',
+                text: 'Database Google Sheet berhasil disambungkan. Menarik data cloud...',
+                icon: 'success',
+                timer: 1000,
+                showConfirmButton: false
+            }).then(() => loadFromCloud(true));
         }
 
         window.copyShareLink = function() {
