@@ -36,6 +36,17 @@
         .behavior-text { flex: 1; text-align: left; padding: 0 16px; font-weight: 700; font-size: 0.9rem; line-height: 1.3; color: #374151; }
         .point-badge { padding: 4px 12px; border-radius: 20px; font-weight: 800; font-size: 0.9rem; min-width: 45px; text-align: center; flex-shrink: 0; }
         
+        .action-card { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; margin-bottom: 10px; width: 100%; background-color: white; border: 1.5px solid; border-bottom-width: 4px; border-radius: 14px; transition: all 0.1s; cursor: pointer; user-select: none; box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
+        .action-card:active { transform: translateY(3px); border-bottom-width: 1.5px !important; margin-bottom: 12.5px; }
+        .action-good { border-color: #22c55e; color: #14532d; }
+        .action-good .icon-box { background-color: #dcfce7; color: #166534; }
+        .action-bad { border-color: #ef4444; color: #7f1d1d; }
+        .action-bad .icon-box { background-color: #fee2e2; color: #991b1b; }
+        .action-home-good { border-color: #6366f1; color: #312e81; }
+        .action-home-good .icon-box { background-color: #e0e7ff; color: #3730a3; }
+        .action-home-bad { border-color: #ec4899; color: #831843; }
+        .action-home-bad .icon-box { background-color: #fce7f3; color: #9d174d; }
+
         .scroll-tabs { display: flex; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; gap: 4px; padding-bottom: 6px; }
         .scroll-tabs::-webkit-scrollbar { height: 5px; display: block; }
         .scroll-tabs::-webkit-scrollbar-track { background: transparent; }
@@ -703,11 +714,11 @@
             
             const notes = sl.filter(l => l.note); 
             
-            const gb = behaviors.filter(b => b.type === 'plus' && !(b.id >= 101 && b.id <= 106) && !(b.id >= 301 && b.id <= 306)).map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="list-item-card item-good"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div><span class="point-badge">+${b.points}</span></button>`).join('');
-            const bb = behaviors.filter(b => b.type === 'minus' && !(b.id >= 201 && b.id <= 206)).map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="list-item-card item-bad"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div><span class="point-badge">${b.points}</span></button>`).join('');
+            const gb = behaviors.filter(b => b.type === 'plus' && !(b.id >= 101 && b.id <= 106) && !(b.id >= 301 && b.id <= 306)).map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'good')" class="action-card action-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div></div><div class="flex items-center gap-2"><span class="point-badge bg-green-500 text-white">+${b.points}</span><span class="text-[10px] bg-green-600 text-white px-2 py-1 rounded-lg font-bold shadow-sm flex items-center gap-1"><i class="fas fa-plus text-[9px]"></i> TAMBAH</span></div></button>`).join('') || '<div class="text-center text-gray-400 py-4 text-xs">Belum ada daftar poin sekolah (+)</div>';
+            const bb = behaviors.filter(b => b.type === 'minus' && !(b.id >= 201 && b.id <= 206)).map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'bad')" class="action-card action-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div></div><div class="flex items-center gap-2"><span class="point-badge bg-red-500 text-white">${b.points}</span><span class="text-[10px] bg-red-600 text-white px-2 py-1 rounded-lg font-bold shadow-sm flex items-center gap-1"><i class="fas fa-minus text-[9px]"></i> CATAT</span></div></button>`).join('') || '<div class="text-center text-gray-400 py-4 text-xs">Belum ada daftar poin sekolah (-)</div>';
             
-            const hgb = behaviors.filter(b => b.type === 'home_plus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'home_good')" class="list-item-card item-good border-indigo-400"><div class="icon-box bg-indigo-100 text-indigo-700"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div><span class="point-badge bg-indigo-500 text-white">+${b.points}</span></button>`).join('');
-            const hbb = behaviors.filter(b => b.type === 'home_minus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'home_bad')" class="list-item-card item-bad border-pink-400"><div class="icon-box bg-pink-100 text-pink-700"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div><span class="point-badge bg-pink-500 text-white">${b.points}</span></button>`).join('');
+            const hgb = behaviors.filter(b => b.type === 'home_plus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'home_good')" class="action-card action-home-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div></div><div class="flex items-center gap-2"><span class="point-badge bg-indigo-500 text-white">+${b.points}</span><span class="text-[10px] bg-indigo-600 text-white px-2 py-1 rounded-lg font-bold shadow-sm flex items-center gap-1"><i class="fas fa-plus text-[9px]"></i> TAMBAH</span></div></button>`).join('') || '<div class="text-center text-gray-400 py-4 text-xs">Belum ada daftar poin rumah (+)</div>';
+            const hbb = behaviors.filter(b => b.type === 'home_minus').map(b => `<button onclick="addPoint('${nis}', '${b.id}', 'home_bad')" class="action-card action-home-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div></div><div class="flex items-center gap-2"><span class="point-badge bg-pink-500 text-white">${b.points}</span><span class="text-[10px] bg-pink-600 text-white px-2 py-1 rounded-lg font-bold shadow-sm flex items-center gap-1"><i class="fas fa-minus text-[9px]"></i> CATAT</span></div></button>`).join('') || '<div class="text-center text-gray-400 py-4 text-xs">Belum ada daftar poin rumah (-)</div>';
             
             let fh = [];
             if(activeTab === 'good') fh = sl.filter(l => l.type === 'plus');
@@ -718,7 +729,13 @@
             else fh = sl.filter(l => l.note);
             
             fh.sort((a,b)=>b.id-a.id);
-            const hl = fh.map(l => `<div class="flex justify-between items-center bg-white border rounded-lg p-2 mb-2 shadow-sm"><div class="w-3/4"><div class="font-bold text-xs">${l.behaviorLabel}</div>${l.note ? `<div class="text-[10px] text-blue-500 italic mt-0.5">"${l.note}"</div>` : ''}<div class="text-[9px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div><div class="flex items-center gap-2"><span class="font-bold text-sm ${l.points>=0?'text-green-600':'text-red-500'}">${l.points>0?'+':''}${l.points}</span><button onclick="deleteLog(${l.id}, '${nis}', '${activeTab}')" class="text-gray-400 hover:text-red-500 px-2"><i class="fas fa-trash"></i></button></div></div>`).join('') || '<div class="text-center text-xs text-gray-400 py-2">Belum ada riwayat.</div>';
+            const hl = fh.map(l => {
+                const isPos = l.points >= 0;
+                const borderClass = isPos ? 'border-l-emerald-500 bg-emerald-50/60' : 'border-l-rose-500 bg-rose-50/60';
+                const iconClass = isPos ? 'bg-emerald-100 text-emerald-700 fa-check' : 'bg-rose-100 text-rose-700 fa-exclamation';
+                const badgeClass = isPos ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-rose-50 text-rose-700 border-rose-300';
+                return `<div class="flex justify-between items-center bg-white border border-gray-200 border-l-4 ${borderClass} rounded-xl p-3 mb-2 shadow-sm"><div class="flex items-center gap-2.5 w-3/4"><div class="w-7 h-7 rounded-full ${iconClass} flex items-center justify-center text-xs flex-shrink-0"><i class="fas ${iconClass.split(' ')[2]}"></i></div><div><div class="font-bold text-xs text-gray-800">${l.behaviorLabel}</div>${l.note ? `<div class="text-[10px] text-blue-600 italic font-medium mt-0.5">"${l.note}"</div>` : ''}<div class="text-[9px] text-gray-400 mt-0.5 flex items-center gap-1"><i class="far fa-clock"></i> ${formatLogDate(l.date)}</div></div></div><div class="flex items-center gap-2"><span class="font-black text-xs px-2.5 py-1 rounded-full border ${badgeClass}">${l.points>0?'+':''}${l.points}</span><button onclick="deleteLog(${l.id}, '${nis}', '${activeTab}')" class="text-gray-300 hover:text-red-500 p-1 transition"><i class="fas fa-trash-alt text-xs"></i></button></div></div>`;
+            }).join('') || '<div class="text-center text-xs text-gray-400 py-3 italic">Belum ada riwayat tercatat.</div>';
             
             const ntl = notes.map(l => `<div class="bg-blue-50 p-3 mb-3 rounded-lg border border-blue-200 shadow-sm"><i class="fas fa-comment-dots text-blue-400 mr-2"></i><span class="text-sm font-semibold">"${l.note}"</span><button onclick="deleteLog(${l.id}, '${nis}', 'note')" class="float-right text-gray-400 hover:text-red-500"><i class="fas fa-trash"></i></button><br><small class="text-gray-400 text-[10px] ml-6">${formatLogDate(l.date)}</small></div>`).join('') || '<div class="text-center text-gray-400 mt-6">Belum ada pesan dikirim.</div>';
             
@@ -735,11 +752,30 @@
                 <button onclick="setTab('home_bad')" id="btn-home_bad" class="tab-btn ${activeTab==='home_bad'?'tab-active-home_bad':'tab-inactive'}"><i class="fas fa-house mr-1"></i> Rumah (-)</button>
             </div>
             
-            <div id="history-container" class="${activeTab==='note'?'hidden':'block'}"><h3 class="font-bold text-gray-700 text-sm mb-2 border-b pb-1">Riwayat Terbaru</h3><div class="bg-gray-50 rounded p-2 max-h-40 overflow-y-auto shadow-inner mb-4">${hl}</div></div>
-            <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}"><div class="flex flex-col">${gb}</div></div>
-            <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}"><div class="flex flex-col">${bb}</div></div>
-            <div id="tab-home_good" class="${activeTab==='home_good'?'block':'hidden'}"><div class="flex flex-col">${hgb}</div></div>
-            <div id="tab-home_bad" class="${activeTab==='home_bad'?'block':'hidden'}"><div class="flex flex-col">${hbb}</div></div>
+            <div id="history-container" class="${activeTab==='note'?'hidden':'block'}">
+                <div class="text-[11px] font-black tracking-wider uppercase text-gray-500 mb-2 flex items-center justify-between border-b pb-1">
+                    <span class="flex items-center gap-1.5"><i class="fas fa-history text-blue-500"></i> Catatan Riwayat Terbaru</span>
+                    <span class="text-[9px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">Hasil Log</span>
+                </div>
+                <div class="bg-gray-100/70 rounded-xl p-2 max-h-48 overflow-y-auto shadow-inner mb-4">${hl}</div>
+            </div>
+            
+            <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}">
+                <div class="text-[11px] font-black tracking-wider uppercase text-emerald-800 mb-2 flex items-center justify-between"><span><i class="fas fa-hand-pointer text-emerald-600 mr-1"></i> Pilih Aktivitas Sekolah (+)</span><span class="text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">Klik Untuk Tambah</span></div>
+                <div class="flex flex-col">${gb}</div>
+            </div>
+            <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}">
+                <div class="text-[11px] font-black tracking-wider uppercase text-rose-800 mb-2 flex items-center justify-between"><span><i class="fas fa-hand-pointer text-rose-600 mr-1"></i> Pilih Pelanggaran Sekolah (-)</span><span class="text-[9px] bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full font-bold">Klik Untuk Catat</span></div>
+                <div class="flex flex-col">${bb}</div>
+            </div>
+            <div id="tab-home_good" class="${activeTab==='home_good'?'block':'hidden'}">
+                <div class="text-[11px] font-black tracking-wider uppercase text-indigo-800 mb-2 flex items-center justify-between"><span><i class="fas fa-hand-pointer text-indigo-600 mr-1"></i> Pilih Kebaikan Rumah (+)</span><span class="text-[9px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold">Klik Untuk Tambah</span></div>
+                <div class="flex flex-col">${hgb}</div>
+            </div>
+            <div id="tab-home_bad" class="${activeTab==='home_bad'?'block':'hidden'}">
+                <div class="text-[11px] font-black tracking-wider uppercase text-pink-800 mb-2 flex items-center justify-between"><span><i class="fas fa-hand-pointer text-pink-600 mr-1"></i> Pilih Pelanggaran Rumah (-)</span><span class="text-[9px] bg-pink-100 text-pink-800 px-2 py-0.5 rounded-full font-bold">Klik Untuk Catat</span></div>
+                <div class="flex flex-col">${hbb}</div>
+            </div>
             <div id="tab-salat" class="${activeTab==='salat'?'block':'hidden'}">${sh}</div>
             
             <div id="tab-note" class="${activeTab==='note'?'block':'hidden'}">
@@ -907,7 +943,7 @@
             if(oldContainer) lastTabScrollPosition = oldContainer.scrollLeft;
 
             currentScreen = 'student_dashboard'; currentViewedNis = s.nis;
-            const ml = logs.filter(l => String(l.studentId).trim().toLowerCase() === String(s.nis).trim().toLowerCase()).sort((a,b) => b.id - a.id), pp = ml.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0), np = ml.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0), tp = pp + np;
+            const ml = logs.filter(l => normalizeNis(l.studentId) === normalizeNis(s.nis)).sort((a,b) => b.id - a.id), pp = ml.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0), np = ml.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0), tp = pp + np;
             
             const notes = ml.filter(l => l.note), latestNote = notes.length > 0 ? notes[0] : null;
             let unreadCount = 0; 
@@ -918,20 +954,20 @@
             
             const dp = s.studentPhoto || 'https://cdn-icons-png.flaticon.com/512/194/194938.png', dc = s.studentCoverPhoto || 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=600&q=80';
             
-            const pl = ml.filter(l => l.type === 'plus').map(l => `<div class="list-item-card item-good"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-check-circle"></i></div><span class="behavior-text">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge">+${l.points}</span><div class="text-[9px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-6">Belum ada data positif di sekolah</div>';
-            const nll = ml.filter(l => l.type === 'minus').map(l => `<div class="list-item-card item-bad"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas fa-exclamation-triangle"></i></div><span class="behavior-text">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge">${l.points}</span><div class="text-[9px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-6">Aman, tidak ada data negatif di sekolah</div>';
+            const pl = ml.filter(l => l.type === 'plus').map(l => `<div class="flex justify-between items-center bg-white border border-gray-200 border-l-4 border-l-emerald-500 rounded-xl p-3 mb-2 shadow-sm"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shadow-inner"><i class="fas fa-check-circle"></i></div><div><span class="font-bold text-sm text-gray-800">${l.behaviorLabel}</span><div class="text-[9px] text-gray-400 mt-0.5 flex items-center gap-1"><i class="far fa-clock"></i> ${formatLogDate(l.date)}</div></div></div><span class="font-black text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">+${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 mt-6 text-xs italic">Belum ada data positif di sekolah</div>';
+            const nll = ml.filter(l => l.type === 'minus').map(l => `<div class="flex justify-between items-center bg-white border border-gray-200 border-l-4 border-l-rose-500 rounded-xl p-3 mb-2 shadow-sm"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-xs shadow-inner"><i class="fas fa-exclamation-triangle"></i></div><div><span class="font-bold text-sm text-gray-800">${l.behaviorLabel}</span><div class="text-[9px] text-gray-400 mt-0.5 flex items-center gap-1"><i class="far fa-clock"></i> ${formatLogDate(l.date)}</div></div></div><span class="font-black text-sm text-rose-700 bg-rose-50 border border-rose-200 px-3 py-1 rounded-full">${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 mt-6 text-xs italic">Aman, tidak ada data negatif di sekolah</div>';
             
-            const hpl = ml.filter(l => l.type === 'home_plus').map(l => `<div class="list-item-card item-good border-indigo-400"><div class="flex items-center gap-3"><div class="icon-box bg-indigo-100 text-indigo-700"><i class="fas fa-check-circle"></i></div><span class="behavior-text">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge bg-indigo-500 text-white">+${l.points}</span><div class="text-[9px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-6">Belum ada riwayat positif di rumah</div>';
-            const hnl = ml.filter(l => l.type === 'home_minus').map(l => `<div class="list-item-card item-bad border-pink-400"><div class="flex items-center gap-3"><div class="icon-box bg-pink-100 text-pink-700"><i class="fas fa-exclamation-triangle"></i></div><span class="behavior-text">${l.behaviorLabel}</span></div><div class="text-right"><span class="point-badge bg-pink-500 text-white">${l.points}</span><div class="text-[9px] text-gray-400 mt-1">${formatLogDate(l.date)}</div></div></div>`).join('') || '<div class="text-center text-gray-400 mt-6">Aman, tidak ada riwayat negatif di rumah</div>';
+            const hpl = ml.filter(l => l.type === 'home_plus').map(l => `<div class="flex justify-between items-center bg-white border border-gray-200 border-l-4 border-l-indigo-500 rounded-xl p-3 mb-2 shadow-sm"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs shadow-inner"><i class="fas fa-check-circle"></i></div><div><span class="font-bold text-sm text-gray-800">${l.behaviorLabel}</span><div class="text-[9px] text-gray-400 mt-0.5 flex items-center gap-1"><i class="far fa-clock"></i> ${formatLogDate(l.date)}</div></div></div><span class="font-black text-sm text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full">+${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 mt-6 text-xs italic">Belum ada riwayat positif di rumah</div>';
+            const hnl = ml.filter(l => l.type === 'home_minus').map(l => `<div class="flex justify-between items-center bg-white border border-gray-200 border-l-4 border-l-pink-500 rounded-xl p-3 mb-2 shadow-sm"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center text-xs shadow-inner"><i class="fas fa-exclamation-triangle"></i></div><div><span class="font-bold text-sm text-gray-800">${l.behaviorLabel}</span><div class="text-[9px] text-gray-400 mt-0.5 flex items-center gap-1"><i class="far fa-clock"></i> ${formatLogDate(l.date)}</div></div></div><span class="font-black text-sm text-pink-700 bg-pink-50 border border-pink-200 px-3 py-1 rounded-full">${l.points}</span></div>`).join('') || '<div class="text-center text-gray-400 mt-6 text-xs italic">Aman, tidak ada riwayat negatif di rumah</div>';
             
-            const hgb_actions = behaviors.filter(b => b.type === 'home_plus').map(b => `<button onclick="reportHomeBehavior('${s.nis}', '${b.id}')" class="list-item-card item-good border-indigo-400 mb-2"><div class="icon-box bg-indigo-100 text-indigo-700"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div><span class="point-badge bg-indigo-500 text-white">+${b.points}</span></button>`).join('');
-            const hbb_actions = behaviors.filter(b => b.type === 'home_minus').map(b => `<button onclick="reportHomeBehavior('${s.nis}', '${b.id}')" class="list-item-card item-bad border-pink-400 mb-2"><div class="icon-box bg-pink-100 text-pink-700"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div><span class="point-badge bg-pink-500 text-white">${b.points}</span></button>`).join('');
+            const hgb_actions = behaviors.filter(b => b.type === 'home_plus').map(b => `<button onclick="reportHomeBehavior('${s.nis}', '${b.id}')" class="action-card action-home-good mb-2"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div></div><div class="flex items-center gap-2"><span class="point-badge bg-indigo-500 text-white">+${b.points}</span><span class="text-[10px] bg-indigo-600 text-white px-2.5 py-1 rounded-lg font-bold shadow-sm flex items-center gap-1"><i class="fas fa-paper-plane text-[9px]"></i> LAPOR</span></div></button>`).join('');
+            const hbb_actions = behaviors.filter(b => b.type === 'home_minus').map(b => `<button onclick="reportHomeBehavior('${s.nis}', '${b.id}')" class="action-card action-home-bad mb-2"><div class="flex items-center gap-3"><div class="icon-box"><i class="fas ${b.icon}"></i></div><div class="behavior-text">${b.label}</div></div><div class="flex items-center gap-2"><span class="point-badge bg-pink-500 text-white">${b.points}</span><span class="text-[10px] bg-pink-600 text-white px-2.5 py-1 rounded-lg font-bold shadow-sm flex items-center gap-1"><i class="fas fa-paper-plane text-[9px]"></i> LAPOR</span></div></button>`).join('');
             
             const ntl = notes.map(l => `<div class="bg-blue-50 p-3 mb-3 rounded-lg border border-blue-200 shadow-sm"><i class="fas fa-comment-dots text-blue-400 mr-2"></i><span class="text-sm font-semibold">"${l.note}"</span><br><small class="text-gray-400 text-[10px] ml-6">${formatLogDate(l.date)}</small></div>`).join('') || '<div class="text-center text-gray-400 mt-6">Belum ada pesan dari Guru.</div>';
             
             const sh = generateSalatHTML(s, 'student');
 
-            const isL = localStorage.getItem('lockedStudentNis') === String(s.nis), lBtn = isL ? `<button onclick="logoutLocked()" class="w-full mt-6 py-3 text-gray-500 font-bold border border-gray-300 rounded-lg"><i class="fas fa-exchange-alt mr-1"></i> Keluar / Ganti Profil Saudara</button>` : `<button onclick="renderStudentLogin()" class="w-full mt-6 py-3 text-red-400 font-bold border border-red-200 rounded-lg">Keluar Akun</button>`;
+            const isL = normalizeNis(localStorage.getItem('lockedStudentNis')) === normalizeNis(s.nis), lBtn = isL ? `<button onclick="logoutLocked()" class="w-full mt-6 py-3 text-gray-500 font-bold border border-gray-300 rounded-lg"><i class="fas fa-exchange-alt mr-1"></i> Keluar / Ganti Profil Saudara</button>` : `<button onclick="renderStudentLogin()" class="w-full mt-6 py-3 text-red-400 font-bold border border-red-200 rounded-lg">Keluar Akun</button>`;
             
             const html = `<div class="px-4 pb-24 fade-in"><div class="bg-white rounded-xl shadow-lg mb-6 mt-4 overflow-hidden"><div class="relative w-full h-32 bg-gray-200"><img src="${dc}" class="w-full h-full object-cover"><button onclick="updateImage('${s.nis}', 'studentCover')" class="absolute top-2 right-2 bg-black/50 text-white rounded-full px-3 py-1 shadow backdrop-blur-sm text-xs"><i class="fas fa-camera mr-1"></i> Ubah Sampul</button></div><div class="relative -mt-12 text-center pb-2"><div class="relative inline-block"><div class="w-24 h-24 bg-white rounded-full overflow-hidden border-4 border-white shadow-md mx-auto"><img src="${dp}" class="w-full h-full object-cover"></div><button onclick="updateImage('${s.nis}', 'studentProfile')" class="absolute bottom-1 right-1 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg text-sm border-2 border-white"><i class="fas fa-camera"></i></button></div><h2 class="text-2xl font-bold text-gray-800 mt-2">${s.name}</h2><p class="text-sm font-bold text-blue-500">${s.nis} | ${s.kelas}</p><p class="text-xs text-gray-400 mt-1"><i class="fas fa-birthday-cake mr-1"></i> ${s.dob ? new Date(s.dob).toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'}) : 'Lahir: -'}</p><div class="flex justify-center items-center gap-4 mt-4 mb-2 px-4"><div class="flex flex-col items-center w-1/3"><span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Positif</span><span class="text-xl font-bold text-green-600">+${pp}</span></div><div class="h-10 w-px bg-gray-200"></div><div class="flex flex-col items-center w-1/3"><span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total</span><span class="text-4xl font-black ${tp>=0?'text-blue-600':'text-red-500'}">${tp}</span></div><div class="h-10 w-px bg-gray-200"></div><div class="flex flex-col items-center w-1/3"><span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Negatif</span><span class="text-xl font-bold text-red-500">${np}</span></div></div></div></div>
             
@@ -943,8 +979,14 @@
                 <button onclick="setTab('home_bad')" id="btn-home_bad" class="tab-btn ${activeTab==='home_bad'?'tab-active-home_bad':'tab-inactive'}"><i class="fas fa-house mr-1"></i> Rumah (-)</button>
             </div>
             
-            <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}">${pl}</div>
-            <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}">${nll}</div>
+            <div id="tab-good" class="${activeTab==='good'?'block':'hidden'}">
+                <div class="text-[11px] font-black tracking-wider uppercase text-gray-500 mb-3 border-b pb-1 flex items-center justify-between"><span><i class="fas fa-history text-emerald-600 mr-1"></i> Catatan Riwayat Sekolah (+)</span><span class="text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">Hasil Poin</span></div>
+                ${pl}
+            </div>
+            <div id="tab-bad" class="${activeTab==='bad'?'block':'hidden'}">
+                <div class="text-[11px] font-black tracking-wider uppercase text-gray-500 mb-3 border-b pb-1 flex items-center justify-between"><span><i class="fas fa-history text-rose-600 mr-1"></i> Catatan Riwayat Sekolah (-)</span><span class="text-[9px] bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full font-bold">Hasil Poin</span></div>
+                ${nll}
+            </div>
             <div id="tab-salat" class="${activeTab==='salat'?'block':'hidden'}">${sh}</div>
             
             <div id="tab-note" class="${activeTab==='note'?'block':'hidden'}">
@@ -953,13 +995,21 @@
             </div>
             
             <div id="tab-home_good" class="${activeTab==='home_good'?'block':'hidden'}">
-                <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 mb-4 shadow-sm"><h3 class="font-bold text-indigo-800 text-sm mb-3"><i class="fas fa-hand-holding-heart mr-1"></i> Lapor Kebaikan Rumah</h3>${hgb_actions}</div>
-                <h3 class="font-bold text-gray-700 text-sm mb-2 border-b pb-1">Riwayat Rumah (+)</h3>${hpl}
+                <div class="bg-indigo-50 border border-indigo-200 rounded-2xl p-3.5 mb-4 shadow-sm">
+                    <div class="text-[11px] font-black tracking-wider uppercase text-indigo-900 mb-3 flex items-center justify-between"><span><i class="fas fa-hand-pointer text-indigo-600 mr-1"></i> Lapor Kebaikan Rumah (Klik):</span><span class="text-[9px] bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded-full font-bold">Tombol Lapor</span></div>
+                    ${hgb_actions}
+                </div>
+                <div class="text-[11px] font-black tracking-wider uppercase text-gray-500 mb-2 border-b pb-1 flex items-center justify-between"><span><i class="fas fa-history text-indigo-600 mr-1"></i> Riwayat Rumah (+)</span><span class="text-[9px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold">Hasil Log</span></div>
+                ${hpl}
             </div>
             
             <div id="tab-home_bad" class="${activeTab==='home_bad'?'block':'hidden'}">
-                <div class="bg-pink-50 border border-pink-200 rounded-xl p-3 mb-4 shadow-sm"><h3 class="font-bold text-pink-800 text-sm mb-3"><i class="fas fa-triangle-exclamation mr-1"></i> Lapor Pelanggaran Rumah</h3>${hbb_actions}</div>
-                <h3 class="font-bold text-gray-700 text-sm mb-2 border-b pb-1">Riwayat Rumah (-)</h3>${hnl}
+                <div class="bg-pink-50 border border-pink-200 rounded-2xl p-3.5 mb-4 shadow-sm">
+                    <div class="text-[11px] font-black tracking-wider uppercase text-pink-900 mb-3 flex items-center justify-between"><span><i class="fas fa-hand-pointer text-pink-600 mr-1"></i> Lapor Pelanggaran Rumah (Klik):</span><span class="text-[9px] bg-pink-200 text-pink-800 px-2 py-0.5 rounded-full font-bold">Tombol Lapor</span></div>
+                    ${hbb_actions}
+                </div>
+                <div class="text-[11px] font-black tracking-wider uppercase text-gray-500 mb-2 border-b pb-1 flex items-center justify-between"><span><i class="fas fa-history text-pink-600 mr-1"></i> Riwayat Rumah (-)</span><span class="text-[9px] bg-pink-100 text-pink-800 px-2 py-0.5 rounded-full font-bold">Hasil Log</span></div>
+                ${hnl}
             </div>
             
             ${lBtn}
@@ -1259,8 +1309,6 @@
                 if (r.isConfirmed && r.value) {
                     performAtomicSync(() => {
                         schoolData.teacherPassword = r.value;
-                    }, 'Password Guru Berhasil Diperbarui & Disimpan ke Cloud!', () => {
-                        if (currentScreen === 'setup') renderSetup();
                     });
                 }
             });
@@ -1276,6 +1324,95 @@
                 Swal.close(); 
                 renderSetup(); 
             }
+        }
+
+        function extractSheetId(input) {
+            if (!input) return '';
+            const match = input.trim().match(/\/d\/([a-zA-Z0-9-_]+)/);
+            return match ? match[1] : input.trim();
+        }
+
+        window.checkConnectionAndSave = function(inputVal) {
+            const cleanId = extractSheetId(inputVal);
+            if (!cleanId) {
+                schoolData.sheetId = "";
+                saveData(true);
+                Swal.fire('Database Diperbarui', 'ID Database telah dikosongkan. Aplikasi sekarang berjalan secara lokal.', 'info').then(() => renderSetup());
+                return;
+            }
+
+            if (!MASTER_API_URL.startsWith("http")) {
+                schoolData.sheetId = cleanId;
+                saveData(true);
+                Swal.fire('Disimpan Lokal', 'ID Google Sheet disimpan, namun API Master belum dikonfigurasi.', 'warning').then(() => renderSetup());
+                return;
+            }
+
+            Swal.fire({
+                title: 'Menghubungkan Database...',
+                text: 'Mencoba membaca data dari Google Sheet...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            fetch(MASTER_API_URL + '?action=read&sheetId=' + cleanId + '&t=' + Date.now())
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    schoolData.sheetId = cleanId;
+                    processCloudMerge(data);
+                    saveData(true);
+                    return syncToCloud(true);
+                })
+                .then(() => {
+                    Swal.fire({
+                        title: 'Berhasil Terhubung!',
+                        text: 'Database Google Sheet berhasil tersambung dan disinkronkan.',
+                        icon: 'success',
+                        confirmButtonText: 'Mantap'
+                    }).then(() => renderSetup());
+                })
+                .catch(err => {
+                    Swal.fire({
+                        title: 'Gagal Terhubung',
+                        text: 'Tidak dapat membaca dari Google Sheet ini. Pastikan Web App Apps Script sudah di-deploy ("Anyone") dan Sheet ID benar. Simpan tetap?',
+                        icon: 'error',
+                        showCancelButton: true,
+                        confirmButtonText: 'Tetap Simpan',
+                        cancelButtonText: 'Batal'
+                    }).then((res) => {
+                        if (res.isConfirmed) {
+                            schoolData.sheetId = cleanId;
+                            saveData(true);
+                            renderSetup();
+                        }
+                    });
+                });
+        };
+
+        window.copyShareLink = function() {
+            if (!schoolData.sheetId) {
+                return Swal.fire('Perhatian', 'Database Google Sheet belum terhubung. Sambungkan database terlebih dahulu!', 'warning');
+            }
+            const url = `${window.location.origin}${window.location.pathname}?sid=${encodeURIComponent(schoolData.sheetId)}&school=${encodeURIComponent(schoolData.name || '')}&loc=${encodeURIComponent(schoolData.location || '')}&city=${encodeURIComponent(schoolData.city || '')}&mode=student`;
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                    Swal.fire('Link Disalin!', 'Link portal murid umum berhasil disalin ke clipboard.', 'success');
+                }).catch(() => {
+                    promptCopyLink(url);
+                });
+            } else {
+                promptCopyLink(url);
+            }
+        };
+
+        function promptCopyLink(url) {
+            Swal.fire({
+                title: 'Link Murid Umum',
+                html: `<p class="text-xs text-gray-500 mb-2">Salin link di bawah ini:</p><input readonly class="w-full p-2 border rounded text-xs text-blue-600 font-mono" value="${url}">`,
+                confirmButtonText: 'Tutup'
+            });
         }
 
         window.saveSettings = function() {
