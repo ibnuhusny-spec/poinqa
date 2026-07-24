@@ -81,7 +81,7 @@
 
     <script>
         // =========================================================================
-        const MASTER_API_URL = "https://script.google.com/macros/s/AKfycbxuZ8E8UOyB78o-e0KvvKCcvU14QVK5WjD5JC49auTmw3ix0BoW7xni0AMKm1gsM6VF/exec"; 
+        const MASTER_API_URL = "https://script.google.com/macros/s/AKfycbwYkt3PWXZFwOp2PLOQ3q5SSSWLAW3uqzyU5Zu_3q-aipk6IiLL4R3ZmjiwTS0fIlX7/exec"; 
         // =========================================================================
 
         const defaultSchoolData = { name: "6", location: "Nama Sekolah", city: "Kabupaten Maros", logo: "./logo.png", sheetId: "", teacherPassword: "QA-Poin77", lastUpdate: 0 };
@@ -1116,114 +1116,108 @@
 
         function renderSetup() { 
             currentScreen = 'setup'; 
-            const html = `<div class="pt-10 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold mb-4">Pengaturan</h2>
-            <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
-                <h3 class="font-bold text-blue-800 mb-1">Sambungkan Database</h3>
+            const html = `<div class="pt-6 px-6 pb-10 fade-in"><h2 class="text-2xl font-bold mb-4 text-gray-800"><i class="fas fa-cog text-gray-600 mr-2"></i>Pengaturan</h2>
+            <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4 shadow-sm">
+                <h3 class="font-bold text-blue-800 mb-1"><i class="fas fa-database mr-1"></i> Sambungkan Database</h3>
                 <p class="text-[10px] text-gray-500 mb-3">Tempelkan Link Google Sheet kelas Anda di bawah ini:</p>
-                <input type="text" id="sheetIdInput" value="${schoolData.sheetId || ''}" placeholder="Contoh: https://docs.google.com/..." class="w-full p-3 rounded border mb-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-400">
+                <input type="text" id="sheetIdInput" value="${schoolData.sheetId || ''}" placeholder="Contoh: https://docs.google.com/..." class="w-full p-3 rounded-lg border mb-2 text-sm shadow-sm focus:ring-2 focus:ring-blue-400">
                 <button onclick="checkConnectionAndSave(document.querySelector('#sheetIdInput').value)" class="w-full btn-3d btn-blue py-3 rounded-lg font-bold mb-3">Simpan Database</button>
                 <button onclick="copyShareLink()" class="w-full btn-3d btn-orange py-3 rounded-lg font-bold text-sm"><i class="fas fa-share-alt mr-2"></i> Salin Link Murid (Umum)</button>
             </div>
-            <div class="bg-gray-50 p-4 rounded-xl border mb-4"><h3 class="font-bold mb-2">Profil & Excel</h3><div class="flex justify-center mb-4"><div class="relative w-24 h-24"><div class="w-full h-full bg-white rounded-full overflow-hidden border-4 border-gray-200 shadow flex items-center justify-center"><img src="${schoolData.logo}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2"></div><button onclick="document.getElementById('schoolLogoInput').click()" class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center border-2 border-white"><i class="fas fa-camera"></i></button><input type="file" id="schoolLogoInput" accept="image/*" class="hidden" onchange="previewSchoolLogo(event)"></div></div><div class="space-y-3"><label class="text-[10px] font-bold text-gray-500 uppercase">Nama Kelas (Contoh: 6)</label><input type="text" id="sName" value="${schoolData.name}" class="w-full p-3 border rounded font-bold"><label class="text-[10px] font-bold text-gray-500 uppercase block">Nama Sekolah</label><input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-3 border rounded"><label class="text-[10px] font-bold text-gray-500 uppercase block">Kabupaten/Kota (Untuk Kop Excel)</label><input type="text" id="sCity" value="${schoolData.city}" class="w-full p-3 border rounded"><label class="text-[10px] font-bold text-gray-500 uppercase block">Password Guru</label><input type="text" id="tPass" value="${schoolData.teacherPassword || 'QA-Poin77'}" class="w-full p-3 border rounded text-red-600 font-bold"></div><button onclick="saveSettings()" class="btn-3d btn-green w-full py-3 rounded-xl font-bold text-white mt-6">Simpan Profil & Password</button></div><button onclick="resetAll()" class="w-full py-3 mt-8 text-red-500 border border-red-500 rounded-xl font-bold">Reset Semua Data</button></div>`; 
+            
+            <div class="bg-white p-5 rounded-2xl border shadow-sm mb-4">
+                <h3 class="font-bold text-gray-800 mb-4 border-b pb-2"><i class="fas fa-school mr-1 text-green-600"></i> Profil Sekolah & Password</h3>
+                <div class="flex justify-center mb-4">
+                    <div class="relative w-24 h-24">
+                        <div class="w-full h-full bg-white rounded-full overflow-hidden border-4 border-gray-200 shadow flex items-center justify-center">
+                            <img src="${schoolData.logo}" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/3209/3209265.png'" class="w-full h-full object-contain p-2">
+                        </div>
+                        <button onclick="document.getElementById('schoolLogoInput').click()" class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center border-2 border-white shadow"><i class="fas fa-camera"></i></button>
+                        <input type="file" id="schoolLogoInput" accept="image/*" class="hidden" onchange="previewSchoolLogo(event)">
+                    </div>
+                </div>
+                
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Nama Kelas (Contoh: 6 / 6A)</label>
+                        <input type="text" id="sName" value="${schoolData.name}" class="w-full p-3 border rounded-lg font-bold">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Nama Sekolah</label>
+                        <input type="text" id="sLoc" value="${schoolData.location}" class="w-full p-3 border rounded-lg">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Kabupaten/Kota (Untuk Kop Excel)</label>
+                        <input type="text" id="sCity" value="${schoolData.city}" class="w-full p-3 border rounded-lg">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">Password Guru</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="tPass" value="${schoolData.teacherPassword || 'QA-Poin77'}" class="w-full p-3 border rounded-lg text-red-600 font-bold bg-gray-50">
+                            <button onclick="changeTeacherPasswordModal()" class="btn-3d btn-purple px-3 py-2 rounded-lg font-bold text-xs whitespace-nowrap"><i class="fas fa-key mr-1"></i> Ganti Password</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <button onclick="saveSettings()" class="btn-3d btn-green w-full py-3.5 rounded-xl font-bold text-white mt-6 shadow-md"><i class="fas fa-save mr-1"></i> Simpan Profil & Password</button>
+            </div>
+            
+            <button onclick="resetAll()" class="w-full py-3 mt-4 text-red-500 border border-red-300 bg-red-50 hover:bg-red-100 rounded-xl font-bold text-sm shadow-sm"><i class="fas fa-trash-alt mr-1"></i> Reset Semua Data Perangkat Ini</button>
+            </div>`; 
             document.getElementById('appContent').innerHTML = html; 
         }
 
-        async function exportToExcel() { 
-            if(students.length === 0) return Swal.fire('Info', 'Data siswa kosong', 'info'); 
-            Swal.fire({title: 'Menyiapkan Excel...', didOpen: () => Swal.showLoading()});
-            if (typeof ExcelJS === 'undefined') { await new Promise((res) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js'; s.onload = res; document.head.appendChild(s); }); }
-            const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Rekap Poin');
-            let rawName = (schoolData.name || "").toUpperCase();
-            let headerText = rawName.startsWith("KELAS") ? "DAFTAR AKUMULASI POIN " + rawName : "DAFTAR AKUMULASI POIN KELAS " + rawName;
-            ws.mergeCells('A1:H1'); ws.getCell('A1').value = headerText; ws.getCell('A1').font = { size: 16, bold: true, color: { argb: 'FF1E3A8A' } }; ws.getCell('A1').alignment = { horizontal: 'center' };
-            ws.mergeCells('A2:H2'); ws.getCell('A2').value = (schoolData.location || "NAMA SEKOLAH").toUpperCase(); ws.getCell('A2').font = { size: 14, bold: true, color: { argb: 'FF15803D' } }; ws.getCell('A2').alignment = { horizontal: 'center' };
-            ws.mergeCells('A3:H3'); ws.getCell('A3').value = (schoolData.city || "KABUPATEN MAROS").toUpperCase(); ws.getCell('A3').font = { size: 12, bold: true }; ws.getCell('A3').alignment = { horizontal: 'center' };
-            ws.addRow([]); 
-            const hr = ws.addRow(['No', 'NIS', 'Nama Lengkap Siswa', 'Kelas', 'Tanggal Lahir', 'Total Positif', 'Total Negatif', 'Poin Akhir']);
-            hr.eachCell((c) => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } }; c.alignment = { horizontal: 'center', vertical: 'middle' }; c.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; });
-            students.forEach((s, idx) => {
-                const sl = logs.filter(l => String(l.studentId).trim().toLowerCase() === String(s.nis).trim().toLowerCase()), pp = sl.filter(l => l.points > 0).reduce((sum, c) => sum + Number(c.points), 0), np = sl.filter(l => l.points < 0).reduce((sum, c) => sum + Number(c.points), 0), tp = pp + np;
-                const r = ws.addRow([idx + 1, s.nis, s.name, s.kelas, s.dob ? new Date(s.dob).toLocaleDateString('id-ID') : "-", `+${pp}`, np, tp]);
-                r.eachCell((c, cn) => {
-                    c.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; c.alignment = { vertical: 'middle' };
-                    if ([1, 2, 4, 5].includes(cn)) c.alignment = { horizontal: 'center', vertical: 'middle' };
-                    if (cn === 6) { c.font = { color: { argb: 'FF166534' }, bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } }; c.alignment = { horizontal: 'center' }; }
-                    if (cn === 7) { c.font = { color: { argb: 'FF991B1B' }, bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; c.alignment = { horizontal: 'center' }; }
-                    if (cn === 8) { c.font = { color: { argb: 'FF854D0E' }, bold: true, size: 12 }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF08A' } }; c.alignment = { horizontal: 'center' }; }
-                });
-            });
-            ws.getColumn(1).width = 5; ws.getColumn(2).width = 15; ws.getColumn(3).width = 30; ws.getColumn(4).width = 10; ws.getColumn(5).width = 18; ws.getColumn(6).width = 15; ws.getColumn(7).width = 15; ws.getColumn(8).width = 15; 
-            const buf = await wb.xlsx.writeBuffer(); const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const u = window.URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = `Rekap_Poin_${schoolData.name.replace(/\s+/g, '_')}.xlsx`; a.click(); window.URL.revokeObjectURL(u); Swal.close();
-        }
-        
-        function processExcel(e) {
-            const f = e.target.files[0]; if(!f) return; const r = new FileReader();
-            r.onload = (e) => {
-                const data = new Uint8Array(e.target.result), wb = XLSX.read(data, {type: 'array'}), jd = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1});
-                for(let i=1; i<jd.length; i++) {
-                    const row = jd[i]; if(row[0] && row[1]) {
-                        const nis = String(row[1]).trim(); let dob = "";
-                        if(row[3]) { if(!isNaN(row[3]) && typeof row[3] === 'number') { let d = new Date((row[3] - 25569) * 86400000); dob = d.toISOString().split('T')[0]; } else { dob = String(row[3]).trim(); } }
-                        
-                        const cleanNis = nis.toLowerCase();
-                        deletedStudentNis = deletedStudentNis.filter(n => String(n).trim().toLowerCase() !== cleanNis);
-                        
-                        if(!students.find(s => String(s.nis).trim().toLowerCase() === cleanNis)) {
-                            students.push({ name: String(row[0]).trim(), nis: nis, kelas: row[2] ? String(row[2]).trim() : "-", dob: dob, photo: "", studentPhoto: "", teacherCoverPhoto: "", studentCoverPhoto: "" }); 
-                        }
-                    }
-                }
-                saveData(); Swal.fire('Sukses', 'Data berhasil diimpor! Pastikan menunggu status di bawah menjadi "Online" sebelum membagikan link ke murid/orang tua.', 'success').then(() => renderTeacherDashboard());
-            }; r.readAsArrayBuffer(f); document.getElementById('excelInput').value = "";
-        }
-        
-        function downloadTemplate() {
-            const wb = XLSX.utils.book_new(), wsD = [["Nama Lengkap", "NIS", "Kelas", "Tanggal Lahir (YYYY-MM-DD)"], ["Budi Santoso", "1001", "1A", "2015-05-20"], ["Siti Aminah", "1002", "1A", "2016-08-15"]], ws = XLSX.utils.aoa_to_sheet(wsD);
-            ws['!cols'] = [{wch: 30}, {wch: 15}, {wch: 10}, {wch: 30}]; XLSX.utils.book_append_sheet(wb, ws, "Template"); XLSX.writeFile(wb, "Template_PoinkuPro.xlsx");
-        }
-
-        // ==========================================
-        // FUNGSI-FUNGSI UNTUK MENU PENGATURAN (SETUP)
-        // ==========================================
-
-        window.checkConnectionAndSave = function(input) {
-            let sheetId = input.trim();
-            
-            // Ekstrak ID jika user memasukkan link panjang Google Sheet
-            const match = input.match(/\/d\/(.*?)(\/|$)/);
-            if (match && match[1]) {
-                sheetId = match[1];
-            }
-            
-            if(!sheetId) return Swal.fire('Error', 'Link atau ID Sheet tidak valid!', 'error');
-            
-            schoolData.sheetId = sheetId;
-            schoolData.lastUpdate = 0; // Reset lastUpdate agar langsung sync data cloud
-            saveData(true);
+        function changeTeacherPasswordModal() {
+            const currentPass = schoolData.teacherPassword || 'QA-Poin77';
             Swal.fire({
-                title: 'Tersimpan!',
-                text: 'Database Google Sheet berhasil disambungkan. Menarik data cloud...',
-                icon: 'success',
-                timer: 1000,
-                showConfirmButton: false
-            }).then(() => loadFromCloud(true));
-        }
+                title: 'Ganti Password Guru',
+                html: `
+                    <div class="space-y-3 text-left">
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase">Password Saat Ini *</label>
+                            <input id="swal-old-pass" type="password" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-400" placeholder="Masukkan password lama">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase">Password Baru *</label>
+                            <input id="swal-new-pass" type="password" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-400" placeholder="Minimal 4 karakter">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500 uppercase">Konfirmasi Password Baru *</label>
+                            <input id="swal-confirm-pass" type="password" class="w-full p-2.5 border rounded focus:ring-2 focus:ring-blue-400" placeholder="Ulangi password baru">
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Simpan Password',
+                cancelButtonText: 'Batal',
+                preConfirm: () => {
+                    const oldPass = document.getElementById('swal-old-pass').value;
+                    const newPass = document.getElementById('swal-new-pass').value.trim();
+                    const confirmPass = document.getElementById('swal-confirm-pass').value.trim();
 
-        window.copyShareLink = function() {
-            if(!schoolData.sheetId) return Swal.fire('Gagal', 'ID Database belum diatur di pengaturan.', 'error');
-            
-            const baseUrl = window.location.origin + window.location.pathname;
-            const fl = `${baseUrl}?sid=${encodeURIComponent(schoolData.sheetId)}&school=${encodeURIComponent(schoolData.name)}&loc=${encodeURIComponent(schoolData.location)}&city=${encodeURIComponent(schoolData.city)}&mode=student`; 
-            
-            const el = document.createElement('textarea'); 
-            el.value = fl; 
-            document.body.appendChild(el); 
-            el.select(); 
-            document.execCommand('copy'); 
-            document.body.removeChild(el); 
-            
-            Swal.fire({ title: 'Link Tersalin!', text: 'Kirimkan link akses publik ini ke grup kelas.', icon: 'success' });
+                    if (oldPass !== currentPass) {
+                        Swal.showValidationMessage('Password lama salah!');
+                        return false;
+                    }
+                    if (!newPass || newPass.length < 4) {
+                        Swal.showValidationMessage('Password baru minimal 4 karakter!');
+                        return false;
+                    }
+                    if (newPass !== confirmPass) {
+                        Swal.showValidationMessage('Konfirmasi password baru tidak cocok!');
+                        return false;
+                    }
+                    return newPass;
+                }
+            }).then((r) => {
+                if (r.isConfirmed && r.value) {
+                    performAtomicSync(() => {
+                        schoolData.teacherPassword = r.value;
+                    }, 'Password Guru Berhasil Diperbarui & Disimpan ke Cloud!', () => {
+                        if (currentScreen === 'setup') renderSetup();
+                    });
+                }
+            });
         }
 
         window.previewSchoolLogo = async function(e) {
@@ -1234,18 +1228,25 @@
                 schoolData.logo = b64; 
                 saveData(true); 
                 Swal.close(); 
-                renderSetup(); // Render ulang untuk menampilkan logo baru
+                renderSetup(); 
             }
         }
 
         window.saveSettings = function() {
-            schoolData.name = document.getElementById('sName').value.trim();
-            schoolData.location = document.getElementById('sLoc').value.trim();
-            schoolData.city = document.getElementById('sCity').value.trim(); // Akan tersimpan sebagai Kabupaten Maros atau lainnya
-            schoolData.teacherPassword = document.getElementById('tPass').value.trim();
+            const newName = document.getElementById('sName').value.trim();
+            const newLoc = document.getElementById('sLoc').value.trim();
+            const newCity = document.getElementById('sCity').value.trim();
+            const newPass = document.getElementById('tPass').value.trim();
             
-            saveData(true);
-            Swal.fire('Tersimpan', 'Profil sekolah dan password berhasil diperbarui.', 'success');
+            if(!newName) return Swal.fire('Perhatian', 'Nama kelas tidak boleh kosong!', 'warning');
+            if(!newPass) return Swal.fire('Perhatian', 'Password guru tidak boleh kosong!', 'warning');
+
+            performAtomicSync(() => {
+                schoolData.name = newName;
+                schoolData.location = newLoc;
+                schoolData.city = newCity;
+                schoolData.teacherPassword = newPass;
+            }, 'Profil Sekolah & Password Guru Berhasil Disimpan ke Cloud!', () => renderSetup());
         }
 
         window.resetAll = function() {
